@@ -103,7 +103,7 @@ export async function GET(request: NextRequest) {
 
       const seenAt = new Date();
       const records = result.items
-        .map((item) => mapPncpContratacao(item, seenAt.toISOString()))
+        .map((item) => mapPncpContratacao(item, seenAt.toISOString(), uf))
         .filter((record): record is OpportunityRecord => record !== null);
 
       summary.saved = await upsertOpportunities(supabase, records, seenAt);

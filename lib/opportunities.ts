@@ -152,6 +152,16 @@ export function normalizeSearchText(value: string) {
     .trim();
 }
 
+/**
+ * Categorias a consultar para um perfil. Sem categoria marcada, a busca é feita
+ * só por palavras-chave, em todas as categorias.
+ */
+export function getSearchCategories(
+  profile: Pick<UserProfile, "categories">,
+): readonly OpportunityCategory[] {
+  return profile.categories.length > 0 ? profile.categories : opportunityCategories;
+}
+
 export function getMatchingOpportunities(
   profile: Pick<UserProfile, "categories" | "keywords">,
   opportunities: Opportunity[],
@@ -159,10 +169,14 @@ export function getMatchingOpportunities(
   const normalizedKeywords = profile.keywords
     .map(normalizeSearchText)
     .filter(Boolean);
+  // Perfil sem categoria nem palavra-chave não tem critério de busca.
+  if (profile.categories.length === 0 && normalizedKeywords.length === 0) {
+    return [];
+  }
+  const categories = getSearchCategories(profile);
 
   return opportunities.filter((opportunity) => {
-    const categoryMatches = profile.categories.includes(opportunity.category);
-    if (!categoryMatches) return false;
+    if (!categories.includes(opportunity.category)) return false;
     if (normalizedKeywords.length === 0) return true;
 
     const searchableText = normalizeSearchText(

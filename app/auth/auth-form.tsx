@@ -6,7 +6,7 @@ import { signInAction, signUpAction, type AuthState } from "./actions";
 
 const initialState: AuthState = {};
 
-export function AuthForm() {
+export function AuthForm({ callbackError }: { callbackError?: string }) {
   const [isSignUp, setIsSignUp] = useState(false);
   const [signInState, signInFormAction, signInPending] = useActionState(
     signInAction,
@@ -60,6 +60,9 @@ export function AuthForm() {
             />
           </div>
           {state.error && <p className="notice notice-error">{state.error}</p>}
+          {!state.error && !state.notice && callbackError && (
+            <p className="notice notice-error">{callbackError}</p>
+          )}
           {state.notice && <p className="notice">{state.notice}</p>}
           <button className="button" type="submit" disabled={pending}>
             {pending ? "Aguarde..." : isSignUp ? "Criar conta" : "Entrar"}

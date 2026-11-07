@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { OpportunityCard } from "@/components/opportunity-card";
 import { ProfileForm } from "@/components/profile-form";
 import { signOutAction } from "@/app/auth/actions";
-import { getMatchingOpportunities } from "@/lib/opportunities";
+import { getMatchingOpportunities, getSearchCategories } from "@/lib/opportunities";
 import { listOpenOpportunities } from "@/lib/opportunity-store";
 import { createClient } from "@/lib/supabase/server";
 import type {
@@ -67,7 +67,10 @@ export default async function DashboardPage() {
   const analysisData = analysesResult.data;
   let openOpportunities: Opportunity[];
   try {
-    openOpportunities = await listOpenOpportunities(supabase, profile.categories);
+    openOpportunities = await listOpenOpportunities(
+      supabase,
+      getSearchCategories(profile),
+    );
   } catch (error) {
     const message =
       error && typeof error === "object" && "message" in error

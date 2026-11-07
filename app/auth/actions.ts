@@ -1,9 +1,22 @@
 "use server";
 
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 
 export type AuthState = { error?: string; notice?: string };
+
+/** Origem pública do app, usada nos links enviados por e-mail. */
+async function getAppOrigin() {
+  const configured = process.env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/$/, "");
+  if (configured) return configured;
+  const requestHeaders = await headers();
+  const origin = requestHeaders.get("origin");
+  if (origin) return origin;
+  const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host");
+  const protocol = requestHeaders.get("x-forwarded-proto") ?? "https";
+  return host ? `${protocol}://${host}` : "http://localhost:3000";
+}
 
 export async function signInAction(
   _previousState: AuthState,
@@ -36,7 +49,10 @@ export async function signUpAction(
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
-    options: { data: { full_name: fullName } },
+    options: {
+      data: { full_name: fullName },
+      emailRedirectTo: `${await getAppOrigin()}/auth/callback?next=/dashboard`,
+    },
   });
   if (error) return { error: "Não foi possível criar a conta. Verifique os dados." };
   if (!data.session) {

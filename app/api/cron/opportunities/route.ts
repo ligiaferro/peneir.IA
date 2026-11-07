@@ -40,15 +40,12 @@ function emailHtml(name: string, opportunities: Opportunity[]) {
   const remaining = opportunities.length - listed.length;
   const appUrl = process.env.NEXT_PUBLIC_APP_URL;
   const dashboardUrl = appUrl ? `${appUrl.replace(/\/$/, "")}/dashboard` : null;
-  const hasDemo = listed.some((opportunity) => opportunity.source === "demo");
 
   const items = listed
     .map(
       (opportunity) => `
         <li style="margin:0 0 20px">
-          <strong>${escapeHtml(opportunity.title)}</strong>${
-            opportunity.source === "demo" ? " <em>(demonstração)</em>" : ""
-          }<br>
+          <strong>${escapeHtml(opportunity.title)}</strong><br>
           ${escapeHtml(opportunity.organization)} · ${escapeHtml(opportunity.location)}<br>
           Propostas/inscrições até ${escapeHtml(formatDeadline(opportunity.deadline))}<br>
           <a href="${escapeHtml(opportunity.sourceUrl)}">Consultar fonte</a>
@@ -72,9 +69,7 @@ function emailHtml(name: string, opportunities: Opportunity[]) {
             }</p>`
           : ""
       }
-      <p>Licitações são coletadas do Portal Nacional de Contratações Públicas (PNCP).${
-        hasDemo ? " Itens marcados como demonstração não são reais." : ""
-      } Confirme sempre requisitos e prazos no edital oficial.</p>
+      <p>Licitações são coletadas do Portal Nacional de Contratações Públicas (PNCP). Confirme sempre requisitos e prazos no edital oficial.</p>
       <p style="color:#64736e;font-size:12px">Você pode alterar seus alertas no seu perfil peneir.IA.</p>
     </div>`;
 }
@@ -205,8 +200,11 @@ export async function GET(request: NextRequest) {
   }
 
   const newSince = Date.now() - newOpportunityWindowMs;
+  // Itens de demonstração aparecem no painel, mas nunca são enviados por e-mail.
   const newOpportunities = openOpportunities.filter(
-    (opportunity) => new Date(opportunity.firstSeenAt).getTime() >= newSince,
+    (opportunity) =>
+      opportunity.source !== "demo" &&
+      new Date(opportunity.firstSeenAt).getTime() >= newSince,
   );
   const resend = new Resend(process.env.RESEND_API_KEY);
   let sent = 0;

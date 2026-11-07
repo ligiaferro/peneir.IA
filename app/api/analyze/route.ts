@@ -47,6 +47,11 @@ function isValidDate(value: string | null): value is string {
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }
 
+/** "2026-11-09" → "09/11/2026". */
+function formatIsoDate(value: string) {
+  return value.split("-").reverse().join("/");
+}
+
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
   const { data: authData, error: authError } = await supabase.auth.getUser();
@@ -174,8 +179,9 @@ export async function POST(request: NextRequest) {
     const expiryDate = isValidDate(analysis.extractedExpiryDate)
       ? analysis.extractedExpiryDate
       : null;
-    const effectiveExpiryDate = expiryDate ?? document.expires_at;
-    if (expiryDate) {
+    const informedExpiryDate = document.expires_at;
+    // A validade digitada pelo usuário prevalece; a extraída só preenche a ausência.
+    if (expiryDate && !informedExpiryDate) {
       const { data: updatedDocument, error: updateError } = await supabase
         .from("documents")
         .update({ expires_at: expiryDate })
@@ -190,8 +196,18 @@ export async function POST(request: NextRequest) {
         );
       }
     }
-    if (effectiveExpiryDate) {
-      analysis.issues.push(...getExpiryWarnings(effectiveExpiryDate));
+    if (expiryDate && informedExpiryDate && expiryDate !== informedExpiryDate) {
+      analysis.reviewNotes.push(
+        `A validade identificada no documento (${formatIsoDate(expiryDate)}) é diferente da informada (${formatIsoDate(informedExpiryDate)}). Mantivemos a informada; confira o arquivo e atualize se necessário.`,
+      );
+    }
+    const knownExpiryDates = [
+      ...new Set([informedExpiryDate, expiryDate].filter(isValidDate)),
+    ];
+    if (knownExpiryDates.length > 0) {
+      for (const date of knownExpiryDates) {
+        analysis.issues.push(...getExpiryWarnings(date));
+      }
     } else {
       analysis.reviewNotes.push(
         "Não foi possível confirmar a validade do documento; confira o arquivo.",

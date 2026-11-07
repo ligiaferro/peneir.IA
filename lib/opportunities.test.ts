@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   getDemoOpportunities,
   getMatchingOpportunities,
+  getSearchCategories,
   normalizeSearchText,
 } from "./opportunities";
 import type { Opportunity } from "./types";
@@ -55,10 +56,23 @@ describe("getMatchingOpportunities", () => {
     ).toEqual([]);
   });
 
-  it("returns no opportunities when no category is selected", () => {
+  it("returns no opportunities when neither category nor keyword is set", () => {
     expect(
       getMatchingOpportunities({ categories: [], keywords: [] }, opportunities),
     ).toEqual([]);
+    expect(
+      getMatchingOpportunities({ categories: [], keywords: ["  "] }, opportunities),
+    ).toEqual([]);
+  });
+
+  it("searches every category by keyword when no category is selected", () => {
+    const results = getMatchingOpportunities(
+      { categories: [], keywords: ["informática", "petrolina"] },
+      opportunities,
+    );
+    expect(results.map((item) => item.id).sort()).toEqual(
+      [bidding.id, "mock-concurso-002"].sort(),
+    );
   });
 
   it("matches keywords against locations", () => {
@@ -67,6 +81,18 @@ describe("getMatchingOpportunities", () => {
       opportunities,
     );
     expect(results.map((item) => item.id)).toEqual(["mock-concurso-002"]);
+  });
+});
+
+describe("getSearchCategories", () => {
+  it("uses the selected categories, or all of them when none is selected", () => {
+    expect(getSearchCategories({ categories: ["bolsas"] })).toEqual(["bolsas"]);
+    expect(getSearchCategories({ categories: [] })).toEqual([
+      "licitacoes",
+      "concursos",
+      "doutorado",
+      "bolsas",
+    ]);
   });
 });
 

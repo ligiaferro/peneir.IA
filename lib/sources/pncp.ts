@@ -87,10 +87,16 @@ const currencyFormatter = new Intl.NumberFormat("pt-BR", {
 /**
  * Converte uma contratação do PNCP para o formato interno.
  * Retorna null para registros incompletos ou que não estão mais divulgados.
+ *
+ * `queriedUf` é a UF usada na consulta. Ela é gravada como `region` porque o
+ * encerramento das oportunidades ausentes filtra por essa mesma UF; usar o
+ * `ufSigla` do registro deixaria abertos os itens em que ele vem vazio ou
+ * diferente.
  */
 export function mapPncpContratacao(
   item: PncpContratacao,
   firstSeenAt = new Date().toISOString(),
+  queriedUf?: string,
 ): OpportunityRecord | null {
   if (item.situacaoCompraId !== situacaoDivulgada) return null;
 
@@ -145,7 +151,7 @@ export function mapPncpContratacao(
     id: `pncp:${item.numeroControlePNCP}`,
     externalId: item.numeroControlePNCP,
     source: "pncp",
-    region: uf,
+    region: queriedUf?.trim().toUpperCase() || uf,
     category: "licitacoes",
     title: truncate(objeto, 160),
     organization,

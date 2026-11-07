@@ -40,7 +40,8 @@ export function ProfileForm({ profile }: { profile: UserProfile }) {
       <span className="field-label">Quais oportunidades quer acompanhar?</span>
       <p className="field-hint">
         Selecione ao menos uma categoria ou informe uma palavra-chave para
-        continuar.
+        continuar. Sem categoria marcada, buscamos suas palavras-chave em todas
+        as categorias.
       </p>
       <div className="category-options">
         {categories.map(([category, label]) => (

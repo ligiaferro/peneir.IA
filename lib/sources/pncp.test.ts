@@ -78,6 +78,16 @@ describe("mapPncpContratacao", () => {
     ]);
   });
 
+  it("uses the queried UF as region so the sync can close missing records", () => {
+    const withoutUf = {
+      ...sample,
+      unidadeOrgao: { ...sample.unidadeOrgao!, ufSigla: null },
+    };
+    expect(mapPncpContratacao(withoutUf, undefined, "pb")?.region).toBe("PB");
+    expect(mapPncpContratacao(sample, undefined, "PE")?.region).toBe("PE");
+    expect(mapPncpContratacao(sample)?.region).toBe("PB");
+  });
+
   it("truncates long titles but keeps the full object in the summary", () => {
     const objetoCompra = "A".repeat(400);
     const record = mapPncpContratacao({ ...sample, objetoCompra });
