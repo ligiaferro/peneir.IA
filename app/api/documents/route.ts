@@ -1,5 +1,4 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { withUserDb } from "@/lib/db";
 import { createClient } from "@/lib/supabase/server";
 import type { UserDocument } from "@/lib/types";
 
@@ -71,23 +70,21 @@ export async function POST(request: NextRequest) {
 
   let document: UserDocument | undefined;
   try {
-    const { rows } = await withUserDb(authData.user.id, (database) =>
-      database.query<UserDocument>(
-        `INSERT INTO public.documents
-           (user_id, name, document_type, expires_at, storage_path)
-         VALUES ($1, $2, $3, $4, $5)
-         RETURNING id, user_id, name, document_type, expires_at::text AS expires_at,
-                   storage_path, created_at::text AS created_at`,
-        [
-          authData.user.id,
-          safeName,
-          documentType,
-          expiresAt || null,
-          storagePath,
-        ],
-      ),
-    );
-    document = rows[0];
+    const { data, error } = await supabase
+      .from("documents")
+      .insert({
+        user_id: authData.user.id,
+        name: safeName,
+        document_type: documentType,
+        expires_at: expiresAt || null,
+        storage_path: storagePath,
+      })
+      .select(
+        "id, user_id, name, document_type, expires_at, storage_path, created_at",
+      )
+      .single();
+    if (error) throw error;
+    document = data;
   } catch {
     const { error: cleanupError } = await supabase.storage
       .from("documents")
@@ -144,15 +141,14 @@ export async function DELETE(request: NextRequest) {
 
   let document: { id: string; storage_path: string } | undefined;
   try {
-    const { rows } = await withUserDb(authData.user.id, (database) =>
-      database.query<{ id: string; storage_path: string }>(
-        `SELECT id, storage_path
-         FROM public.documents
-         WHERE id = $1 AND user_id = $2`,
-        [body.documentId, authData.user.id],
-      ),
-    );
-    document = rows[0];
+    const { data, error } = await supabase
+      .from("documents")
+      .select("id, storage_path")
+      .eq("id", body.documentId)
+      .eq("user_id", authData.user.id)
+      .maybeSingle();
+    if (error) throw error;
+    document = data ?? undefined;
   } catch {
     return NextResponse.json({ error: "Não foi possível acessar o banco de dados." }, { status: 502 });
   }
@@ -166,22 +162,23 @@ export async function DELETE(request: NextRequest) {
   if (storageError) {
     return NextResponse.json({ error: "Não foi possível remover o arquivo privado." }, { status: 502 });
   }
-  let rowCount: number | null;
+  let deletedDocuments: { id: string }[] | null;
   try {
-    ({ rowCount } = await withUserDb(authData.user.id, (database) =>
-      database.query(
-        `DELETE FROM public.documents
-         WHERE id = $1 AND user_id = $2`,
-        [document.id, authData.user.id],
-      ),
-    ));
+    const { data, error } = await supabase
+      .from("documents")
+      .delete()
+      .eq("id", document.id)
+      .eq("user_id", authData.user.id)
+      .select("id");
+    if (error) throw error;
+    deletedDocuments = data;
   } catch {
     return NextResponse.json(
       { error: "O arquivo foi removido, mas não foi possível atualizar o banco." },
       { status: 502 },
     );
   }
-  if (rowCount !== 1) {
+  if (deletedDocuments?.length !== 1) {
     return NextResponse.json({ error: "O arquivo foi removido, mas os dados não puderam ser atualizados." }, { status: 502 });
   }
 

@@ -3,7 +3,6 @@ import { OpportunityCard } from "@/components/opportunity-card";
 import { ProfileForm } from "@/components/profile-form";
 import { signOutAction } from "@/app/auth/actions";
 import { getMatchingOpportunities } from "@/lib/opportunities";
-import { withUserDb } from "@/lib/db";
 import { createClient } from "@/lib/supabase/server";
 import type {
   AnalysisResult,
@@ -21,69 +20,47 @@ export default async function DashboardPage() {
   const { data: authData, error: authError } = await supabase.auth.getUser();
   if (authError || !authData.user) redirect("/login");
 
-  const { profileData, documentData, analysisData } = await withUserDb(
-    authData.user.id,
-    async (database) => {
-      const { rows: profileRows } = await database.query<{
-        id: string;
-        full_name: string;
-        user_kind: UserKind;
-        categories: OpportunityCategory[];
-        keywords: string[];
-        email_alerts: boolean;
-      }>(
-        `SELECT id, full_name, user_kind, categories, keywords, email_alerts
-         FROM public.profiles
-         WHERE id = $1`,
-        [authData.user.id],
-      );
-      const profile = profileRows[0];
-      if (!profile) {
-        throw new Error(
-          "Não foi possível carregar seu perfil. Confira se a migração do Supabase foi executada.",
-        );
-      }
-
-      const { rows: documents } = await database.query<UserDocument>(
-        `SELECT id, user_id, name, document_type, expires_at::text AS expires_at,
-                storage_path, created_at::text AS created_at
-         FROM public.documents
-         WHERE user_id = $1
-         ORDER BY created_at DESC`,
-        [authData.user.id],
-      );
-      const { rows: analyses } = await database.query<{
-        document_id: string;
-        opportunity_id: string;
-        result: AnalysisResult;
-      }>(
-        `SELECT document_id, opportunity_id, result
-         FROM public.document_analyses
-         WHERE user_id = $1`,
-        [authData.user.id],
-      );
-      return {
-        profileData: profile,
-        documentData: documents,
-        analysisData: analyses,
-      };
-    },
-  );
-  if (!profileData) {
+  const [profileResult, documentsResult, analysesResult] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("id, full_name, user_kind, categories, keywords, email_alerts")
+      .eq("id", authData.user.id)
+      .maybeSingle(),
+    supabase
+      .from("documents")
+      .select("id, user_id, name, document_type, expires_at, storage_path, created_at")
+      .eq("user_id", authData.user.id)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("document_analyses")
+      .select("document_id, opportunity_id, result")
+      .eq("user_id", authData.user.id),
+  ]);
+  if (profileResult.error) {
+    throw new Error(`Não foi possível carregar seu perfil: ${profileResult.error.message}`);
+  }
+  if (!profileResult.data) {
     throw new Error(
       "Não foi possível carregar seu perfil. Confira se a migração do Supabase foi executada.",
     );
   }
+  if (documentsResult.error) {
+    throw new Error(`Não foi possível carregar seus documentos: ${documentsResult.error.message}`);
+  }
+  if (analysesResult.error) {
+    throw new Error(`Não foi possível carregar suas análises: ${analysesResult.error.message}`);
+  }
 
   const profile: UserProfile = {
-    id: profileData.id,
-    full_name: profileData.full_name,
-    user_kind: profileData.user_kind as UserKind,
-    categories: profileData.categories as OpportunityCategory[],
-    keywords: profileData.keywords,
-    email_alerts: profileData.email_alerts,
+    id: profileResult.data.id,
+    full_name: profileResult.data.full_name,
+    user_kind: profileResult.data.user_kind as UserKind,
+    categories: profileResult.data.categories as OpportunityCategory[],
+    keywords: profileResult.data.keywords,
+    email_alerts: profileResult.data.email_alerts,
   };
-  const documents = documentData;
+  const documents = documentsResult.data as UserDocument[];
+  const analysisData = analysesResult.data;
   const hasSearch =
     profile.categories.length > 0 ||
     profile.keywords.some((keyword) => keyword.trim().length > 0);

@@ -1,6 +1,5 @@
 import OpenAI from "openai";
 import { NextResponse, type NextRequest } from "next/server";
-import { withUserDb } from "@/lib/db";
 import { getExpiryWarnings } from "@/lib/expiry";
 import { mockOpportunities } from "@/lib/opportunities";
 import { createClient } from "@/lib/supabase/server";
@@ -80,23 +79,14 @@ export async function POST(request: NextRequest) {
   }
   let document;
   try {
-    const { rows } = await withUserDb(authData.user.id, (database) =>
-      database.query<{
-        id: string;
-        user_id: string;
-        name: string;
-        document_type: string;
-        expires_at: string | null;
-        storage_path: string;
-      }>(
-        `SELECT id, user_id, name, document_type, expires_at::text AS expires_at,
-                storage_path
-         FROM public.documents
-         WHERE id = $1 AND user_id = $2`,
-        [body.documentId, authData.user.id],
-      ),
-    );
-    document = rows[0];
+    const { data, error } = await supabase
+      .from("documents")
+      .select("id, user_id, name, document_type, expires_at, storage_path")
+      .eq("id", body.documentId)
+      .eq("user_id", authData.user.id)
+      .maybeSingle();
+    if (error) throw error;
+    document = data;
   } catch {
     return NextResponse.json({ error: "Não foi possível acessar o documento." }, { status: 502 });
   }
@@ -178,15 +168,14 @@ export async function POST(request: NextRequest) {
       : null;
     const effectiveExpiryDate = expiryDate ?? document.expires_at;
     if (expiryDate) {
-      const { rowCount } = await withUserDb(authData.user.id, (database) =>
-        database.query(
-          `UPDATE public.documents
-           SET expires_at = $1
-           WHERE id = $2 AND user_id = $3`,
-          [expiryDate, document.id, authData.user.id],
-        ),
-      );
-      if (rowCount !== 1) {
+      const { data: updatedDocument, error: updateError } = await supabase
+        .from("documents")
+        .update({ expires_at: expiryDate })
+        .eq("id", document.id)
+        .eq("user_id", authData.user.id)
+        .select("id")
+        .maybeSingle();
+      if (updateError || !updatedDocument) {
         return NextResponse.json(
           { error: "A análise foi feita, mas não foi possível salvar a validade extraída." },
           { status: 502 },
@@ -201,21 +190,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    await withUserDb(authData.user.id, (database) =>
-      database.query(
-        `INSERT INTO public.document_analyses
-           (user_id, document_id, opportunity_id, result)
-         VALUES ($1, $2, $3, $4::jsonb)
-         ON CONFLICT (user_id, document_id, opportunity_id)
-         DO UPDATE SET result = EXCLUDED.result, created_at = now()`,
-        [
-          authData.user.id,
-          document.id,
-          opportunity.id,
-          JSON.stringify(analysis),
-        ],
-      ),
-    );
+    const { error: saveError } = await supabase
+      .from("document_analyses")
+      .upsert(
+        {
+          user_id: authData.user.id,
+          document_id: document.id,
+          opportunity_id: opportunity.id,
+          result: analysis,
+          created_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id,document_id,opportunity_id" },
+      );
+    if (saveError) throw saveError;
 
     return NextResponse.json({ analysis });
   } catch {

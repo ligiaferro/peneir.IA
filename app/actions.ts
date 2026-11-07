@@ -2,7 +2,6 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { withUserDb } from "@/lib/db";
 import { isOpportunityCategory } from "@/lib/opportunities";
 
 export type ProfileState = { error?: string; notice?: string };
@@ -37,32 +36,27 @@ export async function updateProfileAction(
   const { data: authData, error: authError } = await supabase.auth.getUser();
   if (authError || !authData.user) return { error: "Sua sessão expirou. Entre novamente." };
 
-  let updatedRows;
-  try {
-    updatedRows = await withUserDb(authData.user.id, (database) =>
-      database.query(
-        `UPDATE public.profiles
-         SET full_name = $2,
-             user_kind = $3,
-             categories = $4::text[],
-             keywords = $5::text[],
-             email_alerts = $6,
-             updated_at = now()
-         WHERE id = $1`,
-        [
-          authData.user.id,
-          fullName,
-          userKind,
-          categories,
-          keywords,
-          emailAlerts,
-        ],
-      ),
-    );
-  } catch {
-    return { error: "Não foi possível acessar o banco de dados. Tente novamente." };
+  const { data: updatedProfile, error: updateError } = await supabase
+    .from("profiles")
+    .update({
+      full_name: fullName,
+      user_kind: userKind as "empresa" | "pessoa",
+      categories,
+      keywords,
+      email_alerts: emailAlerts,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", authData.user.id)
+    .select("id")
+    .maybeSingle();
+  if (updateError) {
+    console.error("Could not update user profile.", {
+      userId: authData.user.id,
+      error: updateError.message,
+    });
+    return { error: "Não foi possível salvar seu perfil. Tente novamente." };
   }
-  if (updatedRows.rowCount !== 1) {
+  if (!updatedProfile) {
     return { error: "Não foi possível salvar seu perfil. Tente novamente." };
   }
 

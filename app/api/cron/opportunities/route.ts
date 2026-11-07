@@ -1,9 +1,9 @@
 import { timingSafeEqual } from "node:crypto";
 import { Resend } from "resend";
 import { NextResponse, type NextRequest } from "next/server";
-import { withServiceDb } from "@/lib/db";
 import { getMatchingOpportunities, mockOpportunities } from "@/lib/opportunities";
-import type { Opportunity, OpportunityCategory } from "@/lib/types";
+import { createServiceClient } from "@/lib/supabase/admin";
+import type { Opportunity } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -67,34 +67,57 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  if (!process.env.DATABASE_URL) {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
     return NextResponse.json(
-      { error: "Configure DATABASE_URL com a URI PostgreSQL do Supabase." },
+      { error: "Configure NEXT_PUBLIC_SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY." },
       { status: 503 },
     );
   }
 
-  let profiles;
+  const supabase = createServiceClient();
+  const perPage = 1000;
+  const authUsers = new Map<
+    string,
+    { email: string | null; emailConfirmed: boolean }
+  >();
+  let page = 1;
   try {
-    const { rows } = await withServiceDb((database) =>
-      database.query<{
-        id: string;
-        full_name: string;
-        categories: OpportunityCategory[];
-        keywords: string[];
-        email: string | null;
-        email_confirmed: boolean;
-      }>(
-        `SELECT p.id, p.full_name, p.categories, p.keywords, u.email,
-                (u.email_confirmed_at IS NOT NULL) AS email_confirmed
-         FROM public.profiles AS p
-         JOIN auth.users AS u ON u.id = p.id
-         WHERE p.email_alerts = true`,
-      ),
-    );
-    profiles = rows;
+    while (true) {
+      const { data, error } = await supabase.auth.admin.listUsers({
+        page,
+        perPage,
+      });
+      if (error) throw error;
+
+      for (const user of data.users) {
+        authUsers.set(user.id, {
+          email: user.email ?? null,
+          emailConfirmed: Boolean(user.email_confirmed_at),
+        });
+      }
+      if (data.users.length < perPage) break;
+      page += 1;
+    }
   } catch {
-    return NextResponse.json({ error: "Não foi possível consultar os perfis." }, { status: 502 });
+    console.error("Could not load Supabase Auth users for opportunity alerts.");
+    return NextResponse.json(
+      { error: "Não foi possível consultar as contas de autenticação." },
+      { status: 502 },
+    );
+  }
+
+  const { data: profiles, error: profilesError } = await supabase
+    .from("profiles")
+    .select("id, full_name, categories, keywords")
+    .eq("email_alerts", true);
+  if (profilesError) {
+    console.error("Could not load profiles for opportunity alerts.", {
+      error: profilesError.message,
+    });
+    return NextResponse.json(
+      { error: "Não foi possível consultar os perfis." },
+      { status: 502 },
+    );
   }
 
   const recentOpportunities = mockOpportunities.filter(
@@ -109,14 +132,22 @@ export async function GET(request: NextRequest) {
   for (const profile of profiles) {
     const matches = getMatchingOpportunities(
       {
-        categories: profile.categories as OpportunityCategory[],
+        categories: profile.categories,
         keywords: profile.keywords,
       },
       recentOpportunities,
     );
     if (matches.length === 0) continue;
 
-    if (!profile.email || !profile.email_confirmed) {
+    const authUser = authUsers.get(profile.id);
+    if (!authUser) {
+      failed += 1;
+      console.error("Could not find auth user for opportunity profile.", {
+        userId: profile.id,
+      });
+      continue;
+    }
+    if (!authUser.email || !authUser.emailConfirmed) {
       skipped += 1;
       continue;
     }
@@ -124,13 +155,15 @@ export async function GET(request: NextRequest) {
     for (const opportunity of matches) {
       let claimed: boolean;
       try {
-        const { rows } = await withServiceDb((database) =>
-          database.query<{ claimed: boolean }>(
-            `SELECT public.claim_opportunity_notification($1::uuid, $2::text) AS claimed`,
-            [profile.id, opportunity.id],
-          ),
+        const { data, error } = await supabase.rpc(
+          "claim_opportunity_notification",
+          {
+            p_user_id: profile.id,
+            p_opportunity_id: opportunity.id,
+          },
         );
-        claimed = rows[0]?.claimed ?? false;
+        if (error) throw error;
+        claimed = data;
       } catch {
         failed += 1;
         console.error("Could not claim opportunity notification.", {
@@ -143,21 +176,22 @@ export async function GET(request: NextRequest) {
 
       const { error: emailError } = await resend.emails.send({
         from: process.env.RESEND_FROM_EMAIL,
-        to: profile.email,
+        to: authUser.email,
         subject: `Nova oportunidade: ${opportunity.title}`,
         html: emailHtml(profile.full_name || "Olá", [opportunity]),
       });
 
       if (emailError) {
         try {
-          await withServiceDb((database) =>
-            database.query(
-              `UPDATE public.notification_deliveries
-               SET status = 'pending', updated_at = now()
-               WHERE user_id = $1 AND opportunity_id = $2`,
-              [profile.id, opportunity.id],
-            ),
-          );
+          const { error } = await supabase
+            .from("notification_deliveries")
+            .update({
+              status: "pending",
+              updated_at: new Date().toISOString(),
+            })
+            .eq("user_id", profile.id)
+            .eq("opportunity_id", opportunity.id);
+          if (error) throw error;
         } catch {
           console.error("Could not reset failed opportunity notification.", {
             userId: profile.id,
@@ -173,14 +207,17 @@ export async function GET(request: NextRequest) {
       }
 
       try {
-        await withServiceDb((database) =>
-          database.query(
-            `UPDATE public.notification_deliveries
-             SET status = 'sent', updated_at = now(), sent_at = now()
-             WHERE user_id = $1 AND opportunity_id = $2`,
-            [profile.id, opportunity.id],
-          ),
-        );
+        const sentAt = new Date().toISOString();
+        const { error } = await supabase
+          .from("notification_deliveries")
+          .update({
+            status: "sent",
+            updated_at: sentAt,
+            sent_at: sentAt,
+          })
+          .eq("user_id", profile.id)
+          .eq("opportunity_id", opportunity.id);
+        if (error) throw error;
       } catch {
         failed += 1;
         console.error("Email sent but delivery status could not be saved.", {
