@@ -1,9 +1,9 @@
 import OpenAI from "openai";
 import { NextResponse, type NextRequest } from "next/server";
 import { getExpiryWarnings } from "@/lib/expiry";
-import { mockOpportunities } from "@/lib/opportunities";
+import { getOpportunityById } from "@/lib/opportunity-store";
 import { createClient } from "@/lib/supabase/server";
-import type { AnalysisResult } from "@/lib/types";
+import type { AnalysisResult, Opportunity } from "@/lib/types";
 
 const responseSchema = {
   type: "object",
@@ -71,24 +71,28 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Oportunidade ou documento inválido." }, { status: 400 });
   }
 
-  const opportunity = mockOpportunities.find(
-    (item) => item.id === body.opportunityId,
-  );
-  if (!opportunity) {
-    return NextResponse.json({ error: "Oportunidade não encontrada." }, { status: 404 });
-  }
+  const opportunityId = body.opportunityId;
+  const documentId = body.documentId;
+  let opportunity: Opportunity | null;
   let document;
   try {
-    const { data, error } = await supabase
-      .from("documents")
-      .select("id, user_id, name, document_type, expires_at, storage_path")
-      .eq("id", body.documentId)
-      .eq("user_id", authData.user.id)
-      .maybeSingle();
-    if (error) throw error;
-    document = data;
+    const [opportunityResult, documentResult] = await Promise.all([
+      getOpportunityById(supabase, opportunityId),
+      supabase
+        .from("documents")
+        .select("id, user_id, name, document_type, expires_at, storage_path")
+        .eq("id", documentId)
+        .eq("user_id", authData.user.id)
+        .maybeSingle(),
+    ]);
+    if (documentResult.error) throw documentResult.error;
+    opportunity = opportunityResult;
+    document = documentResult.data;
   } catch {
     return NextResponse.json({ error: "Não foi possível acessar o documento." }, { status: 502 });
+  }
+  if (!opportunity) {
+    return NextResponse.json({ error: "Oportunidade não encontrada." }, { status: 404 });
   }
   if (!document) {
     return NextResponse.json({ error: "Documento não encontrado." }, { status: 404 });
@@ -130,13 +134,17 @@ export async function POST(request: NextRequest) {
               type: "input_text",
               text: JSON.stringify({
                 tarefa:
-                  "Analise o documento do usuário em relação aos requisitos mockados da oportunidade. Identifique validade vencida ou próxima do vencimento quando houver data legível. Não presuma que ausência de evidência significa que o documento não atende.",
+                  "Analise o documento do usuário em relação aos requisitos da oportunidade. Identifique validade vencida ou próxima do vencimento quando houver data legível. Não presuma que ausência de evidência significa que o documento não atende.",
                 tipoDocumento: document.document_type,
                 validadeInformada: document.expires_at,
                 oportunidade: {
                   titulo: opportunity.title,
                   organização: opportunity.organization,
+                  objeto: opportunity.summary,
                   requisitos: opportunity.requirements,
+                  observacaoRequisitos: opportunity.requirementsAreGeneric
+                    ? "Requisitos usuais de habilitação da Lei 14.133/2021, não lidos do edital. Indique em reviewNotes que o edital pode exigir documentos diferentes."
+                    : null,
                 },
               }),
             },

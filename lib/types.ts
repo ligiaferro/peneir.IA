@@ -7,9 +7,11 @@ export const opportunityCategories = [
 
 export type OpportunityCategory = (typeof opportunityCategories)[number];
 export type UserKind = "empresa" | "pessoa";
+export type OpportunitySource = "pncp" | "demo";
 
 export type Opportunity = {
   id: string;
+  source: OpportunitySource;
   title: string;
   organization: string;
   category: OpportunityCategory;
@@ -17,8 +19,13 @@ export type Opportunity = {
   summary: string;
   tags: string[];
   requirements: string[];
+  /** true quando os requisitos são uma lista genérica e não foram lidos do edital. */
+  requirementsAreGeneric: boolean;
+  /** Data e hora de encerramento (ISO 8601). */
   deadline: string;
   publishedAt: string;
+  /** Quando a peneir.IA viu a oportunidade pela primeira vez (ISO 8601). */
+  firstSeenAt: string;
   sourceUrl: string;
 };
 

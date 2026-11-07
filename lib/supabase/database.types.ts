@@ -8,6 +8,9 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[];
 
+/** Fontes reais gravadas em `public.opportunities` (as de demonstração ficam no código). */
+type OpportunitySourceTable = "pncp";
+
 export type Database = {
   public: {
     Tables: {
@@ -125,6 +128,75 @@ export type Database = {
           status?: "pending" | "sending" | "sent";
           updated_at?: string;
           sent_at?: string | null;
+        };
+        Relationships: [];
+      };
+      opportunities: {
+        Row: {
+          id: string;
+          source: OpportunitySourceTable;
+          external_id: string;
+          region: string;
+          category: OpportunityCategory;
+          title: string;
+          organization: string;
+          location: string;
+          summary: string;
+          tags: string[];
+          requirements: string[];
+          requirements_are_generic: boolean;
+          deadline: string;
+          published_at: string;
+          source_url: string;
+          raw: Json | null;
+          first_seen_at: string;
+          last_seen_at: string;
+          closed_at: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          id: string;
+          source: OpportunitySourceTable;
+          external_id: string;
+          region?: string;
+          category: OpportunityCategory;
+          title: string;
+          organization: string;
+          location?: string;
+          summary?: string;
+          tags?: string[];
+          requirements?: string[];
+          requirements_are_generic?: boolean;
+          deadline: string;
+          published_at: string;
+          source_url: string;
+          raw?: Json | null;
+          first_seen_at?: string;
+          last_seen_at?: string;
+          closed_at?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          source?: OpportunitySourceTable;
+          external_id?: string;
+          region?: string;
+          category?: OpportunityCategory;
+          title?: string;
+          organization?: string;
+          location?: string;
+          summary?: string;
+          tags?: string[];
+          requirements?: string[];
+          requirements_are_generic?: boolean;
+          deadline?: string;
+          published_at?: string;
+          source_url?: string;
+          raw?: Json | null;
+          first_seen_at?: string;
+          last_seen_at?: string;
+          closed_at?: string | null;
+          updated_at?: string;
         };
         Relationships: [];
       };

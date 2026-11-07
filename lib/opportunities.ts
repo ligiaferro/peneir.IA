@@ -5,50 +5,16 @@ import type {
 } from "@/lib/types";
 import { opportunityCategories } from "@/lib/types";
 
-const relativeDate = (daysAgo: number) => {
-  const date = new Date();
-  date.setUTCDate(date.getUTCDate() - daysAgo);
-  return date.toISOString();
-};
+const dayInMs = 24 * 60 * 60 * 1000;
 
-export const mockOpportunities: Opportunity[] = [
-  {
-    id: "mock-pncp-001",
-    title: "Aquisição de materiais de informática",
-    organization: "Prefeitura Municipal de Recife",
-    category: "licitacoes",
-    location: "Recife, PE",
-    summary:
-      "Compra pública de notebooks e periféricos para unidades administrativas. Participação aberta a micro e pequenas empresas.",
-    tags: ["informática", "fornecimento", "microempresa", "notebooks"],
-    requirements: [
-      "Comprovante de inscrição no CNPJ",
-      "Certidão de regularidade fiscal válida",
-      "Atestado de capacidade técnica",
-      "Proposta comercial",
-    ],
-    deadline: "2026-12-03",
-    publishedAt: relativeDate(0),
-    sourceUrl: "https://pncp.gov.br/",
-  },
-  {
-    id: "mock-pncp-002",
-    title: "Serviços de manutenção predial",
-    organization: "Universidade Federal de Pernambuco",
-    category: "licitacoes",
-    location: "Recife, PE",
-    summary:
-      "Contratação de empresa para serviços de manutenção preventiva e corretiva em prédios do campus.",
-    tags: ["engenharia", "serviços", "manutenção", "atestado técnico"],
-    requirements: [
-      "Registro da empresa no conselho profissional",
-      "Certidões fiscais e trabalhistas",
-      "Atestado de execução de serviço semelhante",
-    ],
-    deadline: "2026-12-12",
-    publishedAt: relativeDate(2),
-    sourceUrl: "https://pncp.gov.br/",
-  },
+type DemoOpportunitySeed = Omit<
+  Opportunity,
+  "source" | "deadline" | "publishedAt" | "firstSeenAt" | "requirementsAreGeneric"
+> & { publishedDaysAgo: number; deadlineInDays: number };
+
+// Categorias ainda sem fonte real conectada. Licitações vêm do PNCP.
+// As datas são relativas ao momento da consulta para que a demonstração não expire.
+const demoOpportunitySeeds: DemoOpportunitySeed[] = [
   {
     id: "mock-concurso-001",
     title: "Concurso público para Analista Administrativo",
@@ -63,8 +29,8 @@ export const mockOpportunities: Opportunity[] = [
       "Diploma de graduação reconhecido",
       "Comprovante de pagamento da inscrição",
     ],
-    deadline: "2026-11-28",
-    publishedAt: relativeDate(0),
+    publishedDaysAgo: 0,
+    deadlineInDays: 21,
     sourceUrl: "https://www.gov.br/",
   },
   {
@@ -81,8 +47,8 @@ export const mockOpportunities: Opportunity[] = [
       "Currículo documentado",
       "Documentos comprobatórios de titulação",
     ],
-    deadline: "2026-12-08",
-    publishedAt: relativeDate(1),
+    publishedDaysAgo: 1,
+    deadlineInDays: 30,
     sourceUrl: "https://www.gov.br/",
   },
   {
@@ -100,8 +66,8 @@ export const mockOpportunities: Opportunity[] = [
       "Projeto de pesquisa",
       "Currículo Lattes atualizado",
     ],
-    deadline: "2026-12-15",
-    publishedAt: relativeDate(0),
+    publishedDaysAgo: 0,
+    deadlineInDays: 38,
     sourceUrl: "https://www.gov.br/capes/",
   },
   {
@@ -119,8 +85,8 @@ export const mockOpportunities: Opportunity[] = [
       "Projeto de pesquisa",
       "Comprovação de proficiência em idioma",
     ],
-    deadline: "2026-12-18",
-    publishedAt: relativeDate(4),
+    publishedDaysAgo: 4,
+    deadlineInDays: 41,
     sourceUrl: "https://www.gov.br/capes/",
   },
   {
@@ -137,11 +103,38 @@ export const mockOpportunities: Opportunity[] = [
       "Plano de trabalho",
       "Comprovante de vínculo com instituição de pesquisa",
     ],
-    deadline: "2026-12-10",
-    publishedAt: relativeDate(0),
+    publishedDaysAgo: 0,
+    deadlineInDays: 33,
     sourceUrl: "https://www.gov.br/capes/",
   },
 ];
+
+export function getDemoOpportunities(now = new Date()): Opportunity[] {
+  const startOfDay = new Date(now);
+  startOfDay.setUTCHours(0, 0, 0, 0);
+  return demoOpportunitySeeds.map(
+    ({ publishedDaysAgo, deadlineInDays, ...seed }) => {
+      const publishedAt = new Date(
+        startOfDay.getTime() - publishedDaysAgo * dayInMs,
+      ).toISOString();
+      return {
+        ...seed,
+        source: "demo",
+        requirementsAreGeneric: false,
+        publishedAt,
+        firstSeenAt: publishedAt,
+        // 23:59 no horário de Brasília (UTC-3).
+        deadline: new Date(
+          startOfDay.getTime() + deadlineInDays * dayInMs + (26 * 60 + 59) * 60 * 1000,
+        ).toISOString(),
+      };
+    },
+  );
+}
+
+export function isDemoOpportunityId(id: string) {
+  return id.startsWith("mock-");
+}
 
 export const categoryLabels: Record<OpportunityCategory, string> = {
   licitacoes: "Licitações",
@@ -150,12 +143,21 @@ export const categoryLabels: Record<OpportunityCategory, string> = {
   bolsas: "Bolsas e pesquisa",
 };
 
+/** Minúsculas e sem acentos, para comparar "INFORMATICA" com "informática". */
+export function normalizeSearchText(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLocaleLowerCase("pt-BR")
+    .trim();
+}
+
 export function getMatchingOpportunities(
   profile: Pick<UserProfile, "categories" | "keywords">,
-  opportunities: Opportunity[] = mockOpportunities,
+  opportunities: Opportunity[],
 ): Opportunity[] {
   const normalizedKeywords = profile.keywords
-    .map((keyword) => keyword.trim().toLocaleLowerCase("pt-BR"))
+    .map(normalizeSearchText)
     .filter(Boolean);
 
   return opportunities.filter((opportunity) => {
@@ -163,15 +165,15 @@ export function getMatchingOpportunities(
     if (!categoryMatches) return false;
     if (normalizedKeywords.length === 0) return true;
 
-    const searchableText = [
-      opportunity.title,
-      opportunity.organization,
-      opportunity.location,
-      opportunity.summary,
-      ...opportunity.tags,
-    ]
-      .join(" ")
-      .toLocaleLowerCase("pt-BR");
+    const searchableText = normalizeSearchText(
+      [
+        opportunity.title,
+        opportunity.organization,
+        opportunity.location,
+        opportunity.summary,
+        ...opportunity.tags,
+      ].join(" "),
+    );
 
     return normalizedKeywords.some((keyword) =>
       searchableText.includes(keyword),

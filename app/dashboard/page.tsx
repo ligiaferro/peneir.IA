@@ -3,9 +3,11 @@ import { OpportunityCard } from "@/components/opportunity-card";
 import { ProfileForm } from "@/components/profile-form";
 import { signOutAction } from "@/app/auth/actions";
 import { getMatchingOpportunities } from "@/lib/opportunities";
+import { listOpenOpportunities } from "@/lib/opportunity-store";
 import { createClient } from "@/lib/supabase/server";
 import type {
   AnalysisResult,
+  Opportunity,
   OpportunityCategory,
   UserDocument,
   UserKind,
@@ -14,6 +16,8 @@ import type {
 import { DashboardDocuments } from "./dashboard-documents";
 
 export const dynamic = "force-dynamic";
+
+const maxDisplayedOpportunities = 30;
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -61,11 +65,25 @@ export default async function DashboardPage() {
   };
   const documents = documentsResult.data as UserDocument[];
   const analysisData = analysesResult.data;
+  let openOpportunities: Opportunity[];
+  try {
+    openOpportunities = await listOpenOpportunities(supabase, profile.categories);
+  } catch (error) {
+    const message =
+      error && typeof error === "object" && "message" in error
+        ? String(error.message)
+        : "erro desconhecido";
+    throw new Error(
+      `Não foi possível carregar as oportunidades: ${message}. Confira se a migração 0002 foi executada.`,
+    );
+  }
   const hasSearch =
     profile.categories.length > 0 ||
     profile.keywords.some((keyword) => keyword.trim().length > 0);
   const hasDocuments = documents.length > 0;
-  const matches = getMatchingOpportunities(profile);
+  const matches = getMatchingOpportunities(profile, openOpportunities);
+  const displayedMatches = matches.slice(0, maxDisplayedOpportunities);
+  const realMatches = matches.filter((item) => item.source !== "demo").length;
 
   return (
     <div className="shell">
@@ -184,11 +202,18 @@ export default async function DashboardPage() {
             <div>
               <h2>Oportunidades para você</h2>
               <p>
-                {matches.length} correspondências no conjunto de demonstração.
-                As fontes reais serão conectadas em uma próxima fase.
+                {matches.length}{" "}
+                {matches.length === 1 ? "correspondência" : "correspondências"}{" "}
+                com prazo aberto
+                {matches.length > displayedMatches.length &&
+                  `; mostrando as ${displayedMatches.length} mais recentes. Use palavras-chave no perfil para refinar`}
+                . Licitações vêm do PNCP; concursos, doutorados e bolsas ainda
+                são dados de demonstração.
               </p>
             </div>
-            <span className="badge">Busca mockada · atualizada diariamente</span>
+            <span className="badge">
+              {realMatches} do PNCP · atualizado diariamente
+            </span>
           </div>
           {matches.length === 0 ? (
             <div className="empty-state">
@@ -197,7 +222,7 @@ export default async function DashboardPage() {
             </div>
           ) : (
             <div className="opportunity-grid">
-              {matches.map((opportunity) => {
+              {displayedMatches.map((opportunity) => {
                 const opportunityAnalyses = analysisData
                   .filter((analysis) => analysis.opportunity_id === opportunity.id)
                   .map((analysis) => ({
@@ -218,8 +243,9 @@ export default async function DashboardPage() {
         </section>
         )}
         <footer className="footer">
-          Oportunidades de demonstração. Confirme sempre os requisitos e prazos
-          no edital original. A análise automatizada é apenas apoio e não
+          Licitações coletadas do Portal Nacional de Contratações Públicas
+          (PNCP); as demais categorias são demonstrativas. Confirme sempre os
+          requisitos e prazos no edital original. A análise automatizada é apenas apoio e não
           substitui a conferência humana.
         </footer>
       </main>

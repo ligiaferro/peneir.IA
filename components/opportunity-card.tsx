@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { formatDate, formatDeadline } from "@/lib/format";
 import { categoryLabels } from "@/lib/opportunities";
 import type {
   AnalysisResult,
@@ -70,10 +71,12 @@ export function OpportunityCard({
   return (
     <article className="opportunity-card">
       <div className="card-topline">
-        <span className="badge">{categoryLabels[opportunity.category]}</span>
+        <span className="badge">
+          {categoryLabels[opportunity.category]}
+          {opportunity.source === "demo" ? " · demonstração" : " · PNCP"}
+        </span>
         <span className="card-date">
-          Publicado{" "}
-          {new Date(opportunity.publishedAt).toLocaleDateString("pt-BR")}
+          Publicado {formatDate(opportunity.publishedAt)}
         </span>
       </div>
       <h3>{opportunity.title}</h3>
@@ -81,7 +84,11 @@ export function OpportunityCard({
         {opportunity.organization} · {opportunity.location}
       </p>
       <p className="opportunity-summary">{opportunity.summary}</p>
-      <span className="field-label">Requisitos informados no edital</span>
+      <span className="field-label">
+        {opportunity.requirementsAreGeneric
+          ? "Requisitos usuais de habilitação (confira o edital)"
+          : "Requisitos informados no edital"}
+      </span>
       <ul className="requirements">
         {opportunity.requirements.map((requirement) => (
           <li key={requirement}>{requirement}</li>
@@ -89,10 +96,8 @@ export function OpportunityCard({
       </ul>
       <div className="card-footer">
         <span>
-          Inscrições até{" "}
-          {new Date(`${opportunity.deadline}T00:00:00`).toLocaleDateString(
-            "pt-BR",
-          )}
+          {opportunity.category === "licitacoes" ? "Propostas" : "Inscrições"}{" "}
+          até {formatDeadline(opportunity.deadline)}
         </span>
         <a
           className="button button-secondary button-small"
