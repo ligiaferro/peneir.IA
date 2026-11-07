@@ -38,6 +38,10 @@ export function ProfileForm({ profile }: { profile: UserProfile }) {
         </div>
       </div>
       <span className="field-label">Quais oportunidades quer acompanhar?</span>
+      <p className="field-hint">
+        Selecione ao menos uma categoria ou informe uma palavra-chave para
+        continuar.
+      </p>
       <div className="category-options">
         {categories.map(([category, label]) => (
           <label className="category-option" key={category}>

@@ -84,6 +84,10 @@ export default async function DashboardPage() {
     email_alerts: profileData.email_alerts,
   };
   const documents = documentData;
+  const hasSearch =
+    profile.categories.length > 0 ||
+    profile.keywords.some((keyword) => keyword.trim().length > 0);
+  const hasDocuments = documents.length > 0;
   const matches = getMatchingOpportunities(profile);
 
   return (
@@ -123,8 +127,21 @@ export default async function DashboardPage() {
               lugar. Configure seu perfil para encontrar o que faz sentido para
               você.
             </p>
-            <a className="button" href="#oportunidades">
-              Ver {matches.length} oportunidades para mim ↓
+            <a
+              className="button"
+              href={
+                !hasSearch
+                  ? "#perfil"
+                  : !hasDocuments
+                    ? "#documentos"
+                    : "#oportunidades"
+              }
+            >
+              {!hasSearch
+                ? "Personalizar minha busca ↓"
+                : !hasDocuments
+                  ? "Adicionar documentos ↓"
+                  : `Ver ${matches.length} oportunidades para mim ↓`}
             </a>
           </div>
           <aside className="hero-aside">
@@ -148,7 +165,7 @@ export default async function DashboardPage() {
           </aside>
         </section>
 
-        <section className="section">
+        <section className="section" id="perfil">
           <div className="section-heading">
             <div>
               <h2>Seu perfil e documentos</h2>
@@ -163,22 +180,28 @@ export default async function DashboardPage() {
               </p>
               <ProfileForm profile={profile} />
             </section>
-            <section className="panel">
-              <h3>Meus documentos</h3>
-              <p className="panel-description">
-                PDFs privados. O conteúdo só é enviado à OpenAI quando você
-                solicita uma análise.
-              </p>
-              <DashboardDocuments
-                key={documents
-                  .map((document) => `${document.id}:${document.expires_at}`)
-                  .join("|")}
-                initialDocuments={documents}
-              />
-            </section>
+            {hasSearch && (
+              <section className="panel" id="documentos">
+                <h3>Meus documentos</h3>
+                <p className="panel-description">
+                  Com base no seu perfil, estas são algumas sugestões. Envie
+                  PDFs privados; o conteúdo só é enviado à OpenAI quando você
+                  solicita uma análise.
+                </p>
+                <DashboardDocuments
+                  key={documents
+                    .map((document) => `${document.id}:${document.expires_at}`)
+                    .join("|")}
+                  initialDocuments={documents}
+                  categories={profile.categories}
+                  keywords={profile.keywords}
+                />
+              </section>
+            )}
           </div>
         </section>
 
+        {hasSearch && hasDocuments && (
         <section className="section" id="oportunidades">
           <div className="section-heading">
             <div>
@@ -216,6 +239,7 @@ export default async function DashboardPage() {
             </div>
           )}
         </section>
+        )}
         <footer className="footer">
           Oportunidades de demonstração. Confirme sempre os requisitos e prazos
           no edital original. A análise automatizada é apenas apoio e não

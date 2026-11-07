@@ -302,6 +302,13 @@ h3 {
   line-height: 1.5;
 }
 
+.field-hint {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
 .form-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -405,6 +412,33 @@ h3 {
   flex-direction: column;
   gap: 8px;
   margin-top: 16px;
+}
+
+.document-suggestions {
+  margin: 2px 0 14px;
+}
+
+.suggestion-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.suggestion-option {
+  padding: 6px 9px;
+  border: 1px solid #dfe7df;
+  border-radius: 20px;
+  background: #fcfdfb;
+  color: #476058;
+  cursor: pointer;
+  font-size: 10px;
+}
+
+.suggestion-option:hover {
+  border-color: #acd0bd;
+  background: var(--mint);
+  color: var(--green-dark);
 }
 
 .document-row {

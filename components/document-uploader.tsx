@@ -1,17 +1,25 @@
 "use client";
 
 import { useRef, useState, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
 import type { UserDocument } from "@/lib/types";
 
 type Props = {
   documents: UserDocument[];
+  suggestedDocumentTypes: string[];
   onChange: (documents: UserDocument[]) => void;
 };
 
-export function DocumentUploader({ documents, onChange }: Props) {
+export function DocumentUploader({
+  documents,
+  suggestedDocumentTypes,
+  onChange,
+}: Props) {
   const formRef = useRef<HTMLFormElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [documentType, setDocumentType] = useState("");
+  const router = useRouter();
 
   async function uploadDocument(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -34,6 +42,8 @@ export function DocumentUploader({ documents, onChange }: Props) {
 
       onChange([result.document, ...documents]);
       formRef.current?.reset();
+      setDocumentType("");
+      router.refresh();
     } catch {
       setError("Falha de conexão ao enviar o documento. Tente novamente.");
     } finally {
@@ -56,6 +66,7 @@ export function DocumentUploader({ documents, onChange }: Props) {
         return;
       }
       onChange(documents.filter((document) => document.id !== documentId));
+      router.refresh();
     } catch {
       setError("Falha de conexão ao remover o documento. Tente novamente.");
     } finally {
@@ -83,14 +94,37 @@ export function DocumentUploader({ documents, onChange }: Props) {
             <input
               id="document_type"
               name="document_type"
-              placeholder="ex.: certidão, diploma, currículo"
+              list="suggested-document-types"
+              value={documentType}
+              onChange={(event) => setDocumentType(event.target.value)}
+              placeholder="Escolha uma sugestão ou descreva o documento"
               maxLength={60}
               required
             />
+            <datalist id="suggested-document-types">
+              {suggestedDocumentTypes.map((suggestion) => (
+                <option value={suggestion} key={suggestion} />
+              ))}
+            </datalist>
           </div>
           <div className="field">
             <label htmlFor="expires_at">Validade (se conhecida)</label>
             <input id="expires_at" name="expires_at" type="date" />
+          </div>
+        </div>
+        <div className="document-suggestions">
+          <span className="field-label">Sugestões para o que você busca</span>
+          <div className="suggestion-options">
+            {suggestedDocumentTypes.map((suggestion) => (
+              <button
+                className="suggestion-option"
+                type="button"
+                key={suggestion}
+                onClick={() => setDocumentType(suggestion)}
+              >
+                {suggestion}
+              </button>
+            ))}
           </div>
         </div>
         <button className="button button-small" disabled={busy} type="submit">
@@ -102,8 +136,8 @@ export function DocumentUploader({ documents, onChange }: Props) {
       <div className="document-list">
         {documents.length === 0 ? (
           <div className="empty-state">
-            Seus arquivos ficam privados. Envie um PDF quando quiser compará-lo
-            com os requisitos de uma oportunidade.
+            Envie pelo menos um PDF para liberar as oportunidades compatíveis
+            com seu perfil. Seus arquivos ficam privados.
           </div>
         ) : (
           documents.map((document) => (

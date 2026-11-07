@@ -26,9 +26,9 @@ Sem `DATABASE_URL`, a aplicação não consegue ler nem gravar no Postgres. Sem 
 
 ## Fluxo do MVP
 
-1. Cadastre-se e escolha categorias e palavras-chave de interesse. O mesmo perfil atende empresas e pessoas.
-2. Consulte as oportunidades de demonstração e abra a análise de requisitos.
-3. Envie PDFs próprios (máximo de 4 MB cada) para o bucket privado. O conteúdo é enviado à OpenAI somente quando você solicita uma análise; os resultados são sugestões, não uma decisão jurídica ou de habilitação.
+1. Cadastre-se e escolha ao menos uma categoria ou palavra-chave do que está buscando. O mesmo perfil atende empresas e pessoas.
+2. Com base no perfil, veja sugestões de tipos de documentos e envie pelo menos um PDF próprio (máximo de 4 MB) para liberar as oportunidades compatíveis.
+3. Consulte as oportunidades de demonstração e abra a análise de requisitos. O conteúdo do PDF é enviado à OpenAI somente quando você solicita uma análise; os resultados são sugestões, não uma decisão jurídica ou de habilitação.
 4. O alerta diário envia por e-mail oportunidades mockadas compatíveis ainda dentro do prazo. O primeiro ciclo pode enviar todas as oportunidades ativas do conjunto de demonstração; o banco deduplica por usuário e oportunidade e recupera reservas de envio abandonadas após 15 minutos.
 
 ## Agendamento

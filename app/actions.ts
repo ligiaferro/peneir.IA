@@ -27,6 +27,11 @@ export async function updateProfileAction(
   if (!fullName || !["empresa", "pessoa"].includes(userKind)) {
     return { error: "Informe um nome e selecione o tipo de perfil." };
   }
+  if (categories.length === 0 && keywords.length === 0) {
+    return {
+      error: "Selecione ao menos uma categoria ou informe uma palavra-chave do que está buscando.",
+    };
+  }
 
   const supabase = await createClient();
   const { data: authData, error: authError } = await supabase.auth.getUser();
