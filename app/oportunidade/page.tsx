@@ -40,7 +40,7 @@ export default async function OpportunityPage({
       getOpportunityEdital(supabase, opportunityId).catch(() => null),
       supabase
         .from("profiles")
-        .select("user_kind")
+        .select("user_kind, ai_consent_at")
         .eq("id", authData.user.id)
         .maybeSingle(),
       supabase
@@ -99,6 +99,9 @@ export default async function OpportunityPage({
           <Link className="button button-secondary button-small" href="/dashboard">
             Oportunidades
           </Link>
+          <Link className="button button-secondary button-small" href="/conta">
+            Conta
+          </Link>
           <form action={signOutAction}>
             <button className="button button-secondary button-small" type="submit">
               Sair
@@ -117,6 +120,7 @@ export default async function OpportunityPage({
           initialDocuments={documents}
           initialAnalyses={analyses}
           initialLinks={links}
+          aiConsentGiven={Boolean(profileResult.data.ai_consent_at)}
         />
       </main>
     </div>

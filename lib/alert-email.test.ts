@@ -39,4 +39,13 @@ describe("alert email", () => {
     expect(html).toContain("Aquisição de &lt;notebooks&gt; &amp; periféricos");
     expect(html).not.toContain("<notebooks>");
   });
+
+  it("adds the unsubscribe link when provided", () => {
+    const html = alertEmailHtml("Ana", [opportunity], {
+      unsubscribeUrl: "https://app.exemplo.com/descadastro?u=1&t=x",
+    });
+    expect(html).toContain('href="https://app.exemplo.com/descadastro?u=1&amp;t=x"');
+    expect(html).toContain("Não quero mais receber alertas");
+    expect(alertEmailHtml("Ana", [opportunity])).not.toContain("Não quero mais receber");
+  });
 });

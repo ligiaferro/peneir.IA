@@ -26,6 +26,8 @@ export type Database = {
           embedding_model: string | null;
           embedding_updated_at: string | null;
           states: string[];
+          terms_accepted_at: string | null;
+          ai_consent_at: string | null;
           email_alerts: boolean;
           created_at: string;
           updated_at: string;
@@ -41,6 +43,8 @@ export type Database = {
           embedding_model?: string | null;
           embedding_updated_at?: string | null;
           states?: string[];
+          terms_accepted_at?: string | null;
+          ai_consent_at?: string | null;
           email_alerts?: boolean;
           created_at?: string;
           updated_at?: string;
@@ -56,6 +60,8 @@ export type Database = {
           embedding_model?: string | null;
           embedding_updated_at?: string | null;
           states?: string[];
+          terms_accepted_at?: string | null;
+          ai_consent_at?: string | null;
           email_alerts?: boolean;
           created_at?: string;
           updated_at?: string;
@@ -180,6 +186,7 @@ export type Database = {
           model: string | null;
           error: string | null;
           processed_at: string | null;
+          checked_at: string | null;
           updated_at: string;
         };
         Insert: {
@@ -192,6 +199,7 @@ export type Database = {
           model?: string | null;
           error?: string | null;
           processed_at?: string | null;
+          checked_at?: string | null;
           updated_at?: string;
         };
         Update: {
@@ -204,6 +212,7 @@ export type Database = {
           model?: string | null;
           error?: string | null;
           processed_at?: string | null;
+          checked_at?: string | null;
           updated_at?: string;
         };
         Relationships: [];
@@ -329,8 +338,25 @@ export type Database = {
     Views: Record<string, never>;
     Functions: {
       claim_edital_processing: {
-        Args: { p_opportunity_id: string };
+        Args: { p_opportunity_id: string; p_force?: boolean };
         Returns: boolean;
+      };
+      search_user_opportunities: {
+        Args: {
+          p_user_id: string;
+          p_categories: string[];
+          p_regions: string[];
+          p_query?: string | null;
+          p_deadline_before?: string | null;
+          p_order?: string;
+          p_limit?: number;
+          p_offset?: number;
+        };
+        Returns: Array<{ opportunity_id: string; similarity: number; total_count: number }>;
+      };
+      prune_old_opportunities: {
+        Args: { p_cutoff: string };
+        Returns: number;
       };
       claim_opportunity_notification: {
         Args: {

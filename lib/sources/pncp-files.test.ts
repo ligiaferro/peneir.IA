@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   downloadPncpFile,
   FileTooLargeError,
+  haveEditalFilesChanged,
   isPncpUrl,
   listPncpFiles,
   parsePncpOpportunityId,
@@ -83,5 +84,17 @@ describe("downloadPncpFile", () => {
     await expect(
       downloadPncpFile("https://example.com/f.pdf", 10, { fetchImpl: respond("x") }),
     ).rejects.toThrow(/fora do PNCP/);
+  });
+});
+
+describe("haveEditalFilesChanged", () => {
+  const file = (url: string) => ({ titulo: "", tipo: "Edital", url, publishedAt: "" });
+
+  it("detects new or replaced files among the ones that would be read", () => {
+    expect(haveEditalFilesChanged(["a", "b"], [file("a"), file("b")], 4)).toBe(false);
+    expect(haveEditalFilesChanged(["a"], [file("c"), file("a")], 4)).toBe(true);
+    expect(haveEditalFilesChanged(["a", "b"], [file("a")], 4)).toBe(true);
+    // Arquivos além do limite de leitura não contam.
+    expect(haveEditalFilesChanged(["a"], [file("a"), file("z")], 1)).toBe(false);
   });
 });

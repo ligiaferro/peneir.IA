@@ -20,6 +20,8 @@ export function escapeHtml(value: string) {
 type AlertEmailOptions = {
   /** Envio pedido pelo botão do painel: lista os editais relevantes, novos ou não. */
   demo?: boolean;
+  /** Página que confirma o cancelamento dos alertas (link assinado). */
+  unsubscribeUrl?: string | null;
 };
 
 export function alertEmailSubject(
@@ -39,7 +41,7 @@ export function alertEmailSubject(
 export function alertEmailHtml(
   name: string,
   opportunities: Opportunity[],
-  { demo = false }: AlertEmailOptions = {},
+  { demo = false, unsubscribeUrl = null }: AlertEmailOptions = {},
 ) {
   const listed = opportunities.slice(0, maxItemsPerEmail);
   const remaining = opportunities.length - listed.length;
@@ -82,7 +84,11 @@ export function alertEmailHtml(
       <p style="color:#64736e;font-size:12px">${
         demo
           ? "Este e-mail foi enviado porque você pediu um envio imediato no painel peneir.IA."
-          : "Você pode alterar seus alertas no seu perfil peneir.IA."
+          : "Você recebe este e-mail porque ativou os alertas no seu perfil peneir.IA."
+      }${
+        unsubscribeUrl
+          ? ` <a href="${escapeHtml(unsubscribeUrl)}" style="color:#64736e">Não quero mais receber alertas</a>.`
+          : ""
       }</p>
     </div>`;
 }

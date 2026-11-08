@@ -1,7 +1,12 @@
 import { after, NextResponse, type NextRequest } from "next/server";
-import { processOpportunityEdital } from "@/lib/edital";
+import { editalLimits, processOpportunityEdital } from "@/lib/edital";
 import { getOpportunityEdital } from "@/lib/edital-store";
 import { getOpportunityById } from "@/lib/opportunity-store";
+import {
+  haveEditalFilesChanged,
+  listPncpFiles,
+  parsePncpOpportunityId,
+} from "@/lib/sources/pncp-files";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -33,19 +38,26 @@ export async function GET(request: NextRequest) {
   }
 }
 
+/** Intervalo mínimo entre verificações de arquivos novos no PNCP. */
+const recheckIntervalMs = 12 * 60 * 60 * 1000;
+
 /**
  * Inicia a leitura do edital (uma vez; o resultado fica salvo para todos). A
  * leitura roda depois da resposta, com `after`, e o cliente acompanha com GET.
+ * Com `check: true`, verifica se um edital já lido ganhou arquivos novos no
+ * PNCP (retificação) e, nesse caso, relê.
  */
 export async function POST(request: NextRequest) {
   const supabase = await authenticate();
   if (!supabase) return NextResponse.json({ error: "Entre para continuar." }, { status: 401 });
 
   let opportunityId = "";
+  let check = false;
   try {
     const body: unknown = await request.json();
     if (typeof body === "object" && body !== null && "opportunityId" in body) {
       opportunityId = String(body.opportunityId);
+      check = "check" in body && body.check === true;
     }
   } catch {
     // Tratado abaixo.
@@ -71,6 +83,9 @@ export async function POST(request: NextRequest) {
   }
 
   const admin = createServiceClient();
+  if (check) {
+    return checkForUpdatedFiles(admin, supabase, opportunity);
+  }
   const { data: claimed, error: claimError } = await admin.rpc("claim_edital_processing", {
     p_opportunity_id: opportunity.id,
   });
@@ -85,4 +100,55 @@ export async function POST(request: NextRequest) {
 
   const edital = await getOpportunityEdital(supabase, opportunity.id).catch(() => null);
   return NextResponse.json({ edital }, { status: 202 });
+}
+
+type Opportunity = NonNullable<Awaited<ReturnType<typeof getOpportunityById>>>;
+
+/** Relê o edital se o PNCP tiver publicado arquivos diferentes dos já lidos. */
+async function checkForUpdatedFiles(
+  admin: ReturnType<typeof createServiceClient>,
+  supabase: NonNullable<Awaited<ReturnType<typeof authenticate>>>,
+  opportunity: Opportunity,
+) {
+  const { data: row } = await admin
+    .from("opportunity_editais")
+    .select("status, files, checked_at, processed_at")
+    .eq("opportunity_id", opportunity.id)
+    .maybeSingle();
+  const lastCheck = row?.checked_at ?? row?.processed_at;
+  const due =
+    row &&
+    (row.status === "ready" || row.status === "no_text") &&
+    (!lastCheck || Date.now() - new Date(lastCheck).getTime() > recheckIntervalMs);
+  if (due) {
+    await admin
+      .from("opportunity_editais")
+      .update({ checked_at: new Date().toISOString() })
+      .eq("opportunity_id", opportunity.id);
+    try {
+      const key = parsePncpOpportunityId(opportunity.id);
+      const latest = key ? await listPncpFiles(key) : [];
+      const previousUrls = Array.isArray(row.files)
+        ? row.files.flatMap((file) =>
+            typeof file === "object" && file !== null && "url" in file && typeof file.url === "string"
+              ? [file.url]
+              : [],
+          )
+        : [];
+      if (latest.length > 0 && haveEditalFilesChanged(previousUrls, latest, editalLimits.files)) {
+        const { data: claimed } = await admin.rpc("claim_edital_processing", {
+          p_opportunity_id: opportunity.id,
+          p_force: true,
+        });
+        if (claimed) after(() => processOpportunityEdital(admin, opportunity));
+      }
+    } catch (error) {
+      console.error("Could not check PNCP files for an updated edital.", {
+        opportunityId: opportunity.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+  const edital = await getOpportunityEdital(supabase, opportunity.id).catch(() => null);
+  return NextResponse.json({ edital });
 }

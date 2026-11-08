@@ -105,12 +105,34 @@ export function EditalPanel({
     }
   }, [finish, opportunityId, poll]);
 
+  /** Verifica, sem bloquear a tela, se o PNCP publicou arquivos novos. */
+  const checkForUpdates = useCallback(async () => {
+    try {
+      const response = await fetch("/api/edital", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ opportunityId, check: true }),
+      });
+      const body = (await response.json()) as EditalResponse;
+      if (body.edital?.status === "processing") {
+        setEdital(body.edital);
+        setWorking(true);
+        await poll();
+      }
+    } catch {
+      // A verificação é opcional; a leitura atual continua válida.
+    }
+  }, [opportunityId, poll]);
+
   useEffect(() => {
     if (started.current) return;
     started.current = true;
     if (initialEdital === null) void start();
     else if (initialEdital.status === "processing") void poll();
-  }, [initialEdital, poll, start]);
+    else if (initialEdital.status === "ready" || initialEdital.status === "no_text") {
+      void checkForUpdates();
+    }
+  }, [checkForUpdates, initialEdital, poll, start]);
 
   useEffect(() => {
     if (!working) return;
@@ -145,7 +167,11 @@ export function EditalPanel({
         <div className="edital-progress">
           <span className="edital-spinner" aria-hidden="true" />
           <div>
-            <strong>{progressMessages[messageIndex]}</strong>
+            <strong>
+              {edital?.insights
+                ? "O PNCP publicou arquivos novos deste edital (retificação ou anexos). Relendo…"
+                : progressMessages[messageIndex]}
+            </strong>
             <p>
               Na primeira vez, a leitura pode levar até um minuto. Depois, ela
               fica salva para esta oportunidade.

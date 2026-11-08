@@ -1,8 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { suggestDocumentsForRequirement } from "@/lib/document-matching";
 import { getAcceptedRequirements } from "@/lib/edital-store";
 import { createClient } from "@/lib/supabase/server";
-import type { UserDocument } from "@/lib/types";
 
 type LinkRequest = {
   documentId: string;
@@ -73,17 +71,6 @@ export async function POST(request: NextRequest) {
   ) {
     return NextResponse.json(
       { error: "Documentos com validade vencida não podem ser reutilizados." },
-      { status: 400 },
-    );
-  }
-  if (
-    suggestDocumentsForRequirement(
-      requirement,
-      [documentResult.data as UserDocument],
-    ).length === 0
-  ) {
-    return NextResponse.json(
-      { error: "Este documento não parece compatível com o requisito selecionado." },
       { status: 400 },
     );
   }

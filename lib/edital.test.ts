@@ -76,6 +76,18 @@ describe("withEditalRequirements", () => {
     expect(result.requirementsAreGeneric).toBe(false);
   });
 
+  it("keeps the previous edital requirements while it is being re-read", () => {
+    const result = withEditalRequirements(opportunity, {
+      status: "processing",
+      files: [],
+      insights: null,
+      requirements: ["CNDT"],
+      processedAt: null,
+      error: null,
+    });
+    expect(result.requirements).toEqual(["CNDT"]);
+  });
+
   it("keeps the generic list otherwise", () => {
     expect(withEditalRequirements(opportunity, null)).toBe(opportunity);
     expect(

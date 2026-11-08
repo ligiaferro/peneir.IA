@@ -138,6 +138,21 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const { data: consent } = await supabase
+    .from("profiles")
+    .select("ai_consent_at")
+    .eq("id", authData.user.id)
+    .maybeSingle();
+  if (!consent?.ai_consent_at) {
+    return NextResponse.json(
+      {
+        error: "Autorize o envio do documento ao provedor de IA para fazer a análise.",
+        code: "ai_consent_required",
+      },
+      { status: 403 },
+    );
+  }
+
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     return NextResponse.json(

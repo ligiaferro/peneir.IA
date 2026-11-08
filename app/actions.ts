@@ -16,7 +16,12 @@ import {
 } from "@/lib/alert-email";
 import { buildProfileEmbeddingText } from "@/lib/opportunity-indexing";
 import { listMatchingOpportunities } from "@/lib/opportunity-store";
+import {
+  hasStaleProfileEmbedding,
+  refreshStaleProfileEmbeddings,
+} from "@/lib/profile-embedding";
 import { createClient } from "@/lib/supabase/server";
+import { buildUnsubscribeUrls, unsubscribeHeaders } from "@/lib/unsubscribe";
 import { getSearchCategories, isOpportunityCategory } from "@/lib/opportunities";
 import { brazilianStateCodes, normalizeStates } from "@/lib/states";
 import type { OpportunityCategory } from "@/lib/types";
@@ -186,11 +191,19 @@ export async function sendAlertNowAction(): Promise<SendAlertState> {
 
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
-    .select("full_name, categories, keywords, states, embedding_model")
+    .select("full_name, categories, keywords, states, embedding_model, products_services")
     .eq("id", user.id)
     .maybeSingle();
   if (profileError || !profile) {
     return { error: "Não foi possível carregar seu perfil. Tente novamente." };
+  }
+  if (
+    hasStaleProfileEmbedding(profile) &&
+    (await refreshStaleProfileEmbeddings(supabase, [{ ...profile, id: user.id }])).length === 0
+  ) {
+    return {
+      error: "O modelo de busca foi atualizado. Salve o perfil novamente antes de enviar.",
+    };
   }
   if (!profile.embedding_model) {
     return {
@@ -228,11 +241,16 @@ export async function sendAlertNowAction(): Promise<SendAlertState> {
   // Reserva o intervalo antes de enviar, para cliques simultâneos não duplicarem.
   lastAlertSentAt.set(user.id, Date.now());
   const resend = new Resend(process.env.RESEND_API_KEY);
+  const unsubscribeUrls = buildUnsubscribeUrls(user.id);
   const { error: emailError } = await resend.emails.send({
     from: process.env.RESEND_FROM_EMAIL,
     to: user.email,
     subject: alertEmailSubject(relevant, { demo: true }),
-    html: alertEmailHtml(profile.full_name || "Olá", relevant, { demo: true }),
+    html: alertEmailHtml(profile.full_name || "Olá", relevant, {
+      demo: true,
+      unsubscribeUrl: unsubscribeUrls?.page,
+    }),
+    headers: unsubscribeHeaders(unsubscribeUrls),
   });
   if (emailError) {
     lastAlertSentAt.delete(user.id);
@@ -248,4 +266,22 @@ export async function sendAlertNowAction(): Promise<SendAlertState> {
       relevant.length === 1 ? "edital relevante" : "editais relevantes"
     }.`,
   };
+}
+
+/**
+ * Registra ou revoga o consentimento para enviar o texto dos documentos ao
+ * provedor de IA (LGPD, art. 7º, I). Sem ele, a análise de documentos fica
+ * bloqueada.
+ */
+export async function setAiConsentAction(granted: boolean): Promise<{ error?: string }> {
+  const supabase = await createClient();
+  const { data: authData } = await supabase.auth.getUser();
+  if (!authData.user) return { error: "Sua sessão expirou. Entre novamente." };
+  const { error } = await supabase
+    .from("profiles")
+    .update({ ai_consent_at: granted ? new Date().toISOString() : null })
+    .eq("id", authData.user.id);
+  if (error) return { error: "Não foi possível registrar sua escolha. Tente novamente." };
+  revalidatePath("/conta");
+  return {};
 }

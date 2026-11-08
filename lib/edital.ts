@@ -33,7 +33,7 @@ export function getEditalModel() {
 const aiTimeoutMs = 200_000;
 
 /** Limites de leitura: protegem o tempo da função e a memória. */
-const limits = {
+export const editalLimits = {
   files: 4,
   fileBytes: 25 * 1024 * 1024,
   totalBytes: 60 * 1024 * 1024,
@@ -62,13 +62,13 @@ async function extractZipPdfs(bytes: Buffer, depth = 0): Promise<ExtractedPart[]
 
   const parts: ExtractedPart[] = [];
   for (const entry of entries) {
-    if (parts.length >= limits.pdfsPerZip) break;
-    if (entry.uncompressedSize > limits.zipEntryBytes) continue;
-    const content = readZipEntry(bytes, entry, limits.zipEntryBytes);
+    if (parts.length >= editalLimits.pdfsPerZip) break;
+    if (entry.uncompressedSize > editalLimits.zipEntryBytes) continue;
+    const content = readZipEntry(bytes, entry, editalLimits.zipEntryBytes);
     if (isPdf(content)) {
       const { text, pages } = await extractPdfText(content, {
-        maxPages: limits.pagesPerPdf,
-        maxChars: limits.totalChars,
+        maxPages: editalLimits.pagesPerPdf,
+        maxChars: editalLimits.totalChars,
       });
       parts.push({ label: entry.name.split("/").pop() ?? entry.name, text, pages });
     } else if (isZip(content) && depth === 0) {
@@ -88,8 +88,8 @@ export async function collectEditalText(pncpFiles: PncpFile[], userAgent?: strin
   let totalBytes = 0;
   let totalChars = 0;
 
-  for (const pncpFile of pncpFiles.slice(0, limits.files)) {
-    if (totalChars >= limits.totalChars) break;
+  for (const pncpFile of pncpFiles.slice(0, editalLimits.files)) {
+    if (totalChars >= editalLimits.totalChars) break;
     const record: EditalFile = {
       titulo: pncpFile.titulo,
       tipo: pncpFile.tipo,
@@ -99,7 +99,7 @@ export async function collectEditalText(pncpFiles: PncpFile[], userAgent?: strin
     };
     files.push(record);
 
-    const remainingBytes = limits.totalBytes - totalBytes;
+    const remainingBytes = editalLimits.totalBytes - totalBytes;
     if (remainingBytes <= 0) {
       record.status = "muito_grande";
       continue;
@@ -107,7 +107,7 @@ export async function collectEditalText(pncpFiles: PncpFile[], userAgent?: strin
     try {
       const { bytes, name } = await downloadPncpFile(
         pncpFile.url,
-        Math.min(limits.fileBytes, remainingBytes),
+        Math.min(editalLimits.fileBytes, remainingBytes),
         { userAgent },
       );
       totalBytes += bytes.length;
@@ -116,8 +116,8 @@ export async function collectEditalText(pncpFiles: PncpFile[], userAgent?: strin
       let parts: ExtractedPart[];
       if (isPdf(bytes)) {
         const { text, pages } = await extractPdfText(bytes, {
-          maxPages: limits.pagesPerPdf,
-          maxChars: limits.totalChars,
+          maxPages: editalLimits.pagesPerPdf,
+          maxChars: editalLimits.totalChars,
         });
         parts = [{ label: name, text, pages }];
       } else if (isZip(bytes)) {
@@ -131,7 +131,7 @@ export async function collectEditalText(pncpFiles: PncpFile[], userAgent?: strin
       record.paginas = parts.reduce((sum, part) => sum + part.pages, 0) || undefined;
       record.status = readable.length > 0 ? "lido" : "sem_texto";
       for (const part of readable) {
-        const text = part.text.slice(0, limits.totalChars - totalChars);
+        const text = part.text.slice(0, editalLimits.totalChars - totalChars);
         if (!text) break;
         sections.push(`=== ${pncpFile.tipo || pncpFile.titulo}: ${part.label} ===\n${text}`);
         totalChars += text.length;

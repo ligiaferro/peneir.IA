@@ -80,6 +80,20 @@ export function AuthForm({
               required
             />
           </div>
+          {isSignUp && (
+            <label className="toggle-row terms-row">
+              <input type="checkbox" name="accept_terms" required />
+              <span>
+                Li e aceito os <Link href="/termos" target="_blank">Termos de Uso</Link> e a{" "}
+                <Link href="/privacidade" target="_blank">Política de Privacidade</Link>.
+              </span>
+            </label>
+          )}
+          {!isSignUp && (
+            <p className="auth-forgot">
+              <Link href="/recuperar-senha">Esqueci minha senha</Link>
+            </p>
+          )}
           {state.error && <p className="notice notice-error">{state.error}</p>}
           {!state.error && !state.notice && callbackError && (
             <p className="notice notice-error">{callbackError}</p>
@@ -112,7 +126,8 @@ export function AuthForm({
         )}
         <p className="fine-print">
           Seus documentos ficam privados. A análise com IA só acontece quando
-          você solicitar.
+          você solicitar. <Link href="/privacidade">Privacidade</Link> ·{" "}
+          <Link href="/termos">Termos</Link>
         </p>
       </section>
     </main>

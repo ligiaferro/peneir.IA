@@ -154,7 +154,12 @@ const faq = [
   },
 ];
 
-export default async function HomePage() {
+export default async function HomePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ conta?: string }>;
+}) {
+  const { conta } = await searchParams;
   const supabase = await createClient();
   const { data } = await supabase.auth.getUser();
   const signedIn = Boolean(data.user);
@@ -193,6 +198,11 @@ export default async function HomePage() {
       </header>
 
       <main>
+        {conta === "excluida" && (
+          <p className="shell notice lp-account-deleted" role="status">
+            Sua conta e seus dados foram excluídos. Obrigado por usar a peneir.IA.
+          </p>
+        )}
         <section className="shell lp-hero">
           <div className="lp-hero-copy">
             <span className="eyebrow">
@@ -478,6 +488,9 @@ export default async function HomePage() {
           Licitações coletadas do Portal Nacional de Contratações Públicas
           (PNCP). Confirme sempre requisitos e prazos no edital original. A
           análise automatizada é apoio e não substitui a conferência humana.
+          <br />
+          <Link href="/privacidade">Política de Privacidade</Link> ·{" "}
+          <Link href="/termos">Termos de Uso</Link>
         </p>
       </footer>
     </div>

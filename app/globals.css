@@ -922,6 +922,188 @@ h3 {
   }
 }
 
+/* ---------- Busca e filtros do painel ---------- */
+
+.dashboard-filters {
+  display: grid;
+  grid-template-columns: minmax(200px, 2fr) repeat(3, minmax(140px, 1fr)) auto;
+  gap: 10px;
+  align-items: end;
+  margin: 0 0 18px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+}
+
+.dashboard-filters .field {
+  margin: 0;
+}
+
+.dashboard-filters select {
+  width: 100%;
+  min-height: 41px;
+  padding: 0 10px;
+  border: 1px solid #dfe7df;
+  border-radius: 10px;
+  background: white;
+}
+
+.dashboard-filter-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.pagination {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 12px;
+  margin-top: 22px;
+}
+
+.pagination > :first-child {
+  justify-self: start;
+}
+
+.pagination > :last-child {
+  justify-self: end;
+}
+
+.pagination-status {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+@media (max-width: 900px) {
+  .dashboard-filters {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .dashboard-filter-search,
+  .dashboard-filter-actions {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 480px) {
+  .dashboard-filters {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---------- Reutilizar documento ---------- */
+
+.document-reuse {
+  margin-bottom: 12px;
+}
+
+.document-reuse-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.document-reuse-row select {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ---------- Autenticação, consentimentos e conta ---------- */
+
+.auth-forgot {
+  margin: -6px 0 14px !important;
+  font-size: 12px !important;
+  text-align: right;
+}
+
+.fine-print a,
+.auth-forgot a,
+.terms-row a,
+.consent-row a,
+.legal a,
+.account a:not(.button),
+.footer a {
+  color: var(--green);
+  font-weight: 700;
+}
+
+.terms-row,
+.consent-row {
+  align-items: flex-start;
+  line-height: 1.5;
+}
+
+.terms-row input,
+.consent-row input {
+  margin-top: 3px;
+  accent-color: var(--green);
+}
+
+.consent-row {
+  margin: 14px 0 0;
+}
+
+.legal {
+  max-width: 780px;
+}
+
+.legal h1 {
+  margin-bottom: 4px;
+  font-size: clamp(28px, 4vw, 38px);
+}
+
+.legal h2 {
+  margin: 28px 0 8px;
+  font-size: 20px;
+}
+
+.legal p,
+.legal li {
+  color: #3a5049;
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+.legal-updated {
+  color: var(--muted) !important;
+  font-size: 13px !important;
+}
+
+.account h1 {
+  margin: 0 0 6px;
+  font-size: 30px;
+}
+
+.account-panel {
+  margin-top: 16px;
+}
+
+.account-panel h2 {
+  margin: 0 0 6px;
+  font-size: 18px;
+}
+
+.account-danger {
+  border-color: #efc9c4;
+}
+
+.danger-form .field {
+  max-width: 320px;
+}
+
+.button-danger {
+  background: var(--red);
+}
+
+.button-danger:hover {
+  background: #9c3b34;
+}
+
+.lp-account-deleted {
+  margin-top: 20px;
+}
+
 /* ---------- Leitura do edital ---------- */
 
 .edital-panel {

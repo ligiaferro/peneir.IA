@@ -145,6 +145,9 @@ export default async function CompanyPage() {
           <Link className="button button-secondary button-small" href="/dashboard">
             Oportunidades
           </Link>
+          <Link className="button button-secondary button-small" href="/conta">
+            Conta
+          </Link>
           <form action={signOutAction}>
             <button className="button button-secondary button-small" type="submit">
               Sair

@@ -32,6 +32,20 @@ export async function getOpportunityEdital(
 }
 
 /**
+ * Há requisitos lidos do edital. Durante uma releitura (status "processing"),
+ * continuam valendo os da leitura anterior.
+ */
+function hasUsableRequirements(
+  edital: OpportunityEdital | null,
+): edital is OpportunityEdital {
+  return (
+    edital !== null &&
+    (edital.status === "ready" || edital.status === "processing") &&
+    edital.requirements.length > 0
+  );
+}
+
+/**
  * Usa os documentos extraídos do edital no lugar da lista genérica, quando a
  * leitura terminou e encontrou requisitos.
  */
@@ -39,7 +53,7 @@ export function withEditalRequirements(
   opportunity: Opportunity,
   edital: OpportunityEdital | null,
 ): Opportunity {
-  if (edital?.status !== "ready" || edital.requirements.length === 0) return opportunity;
+  if (!hasUsableRequirements(edital)) return opportunity;
   return {
     ...opportunity,
     requirements: edital.requirements,
@@ -59,7 +73,29 @@ export async function getAcceptedRequirements(
 ) {
   // Sem a migração do edital, vale só a lista gravada.
   const edital = await getOpportunityEdital(supabase, opportunityId).catch(() => null);
-  return edital?.status === "ready"
+  return hasUsableRequirements(edital)
     ? [...new Set([...storedRequirements, ...edital.requirements])]
     : storedRequirements;
+}
+
+/** Leituras de edital de várias oportunidades (ex.: os cards de uma página). */
+export async function getOpportunityEditais(supabase: Client, opportunityIds: string[]) {
+  const editais = new Map<string, OpportunityEdital>();
+  if (opportunityIds.length === 0) return editais;
+  const { data, error } = await supabase
+    .from("opportunity_editais")
+    .select("opportunity_id, status, files, insights, requirements, processed_at, error")
+    .in("opportunity_id", opportunityIds);
+  if (error) throw error;
+  for (const row of data) {
+    editais.set(row.opportunity_id, {
+      status: row.status as EditalStatus,
+      files: (row.files ?? []) as EditalFile[],
+      insights: (row.insights ?? null) as EditalInsights | null,
+      requirements: row.requirements ?? [],
+      processedAt: row.processed_at,
+      error: row.error,
+    });
+  }
+  return editais;
 }

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { setAiConsentAction } from "@/app/actions";
 import { DocumentUploader } from "@/components/document-uploader";
 import { EditalPanel } from "@/components/edital-panel";
 import { suggestDocumentsForRequirement } from "@/lib/document-matching";
@@ -33,12 +34,14 @@ export function OpportunityDetail({
   initialDocuments,
   initialAnalyses,
   initialLinks,
+  aiConsentGiven,
 }: {
   opportunity: Opportunity;
   edital: OpportunityEdital | null;
   initialDocuments: UserDocument[];
   initialAnalyses: AnalysisRecord[];
   initialLinks: UserDocumentOpportunityLink[];
+  aiConsentGiven: boolean;
 }) {
   const [documents, setDocuments] = useState(initialDocuments);
   const [links, setLinks] = useState(initialLinks);
@@ -50,6 +53,8 @@ export function OpportunityDetail({
   );
   const [analyses, setAnalyses] = useState(initialAnalyses);
   const [pending, setPending] = useState(false);
+  const [aiConsent, setAiConsent] = useState(aiConsentGiven);
+  const [consentChecked, setConsentChecked] = useState(false);
   const [error, setError] = useState("");
   const router = useRouter();
   const requirements = useMemo(() => {
@@ -111,6 +116,41 @@ export function OpportunityDetail({
     }
   }, [opportunityDocuments, documentId]);
 
+  function unlinkedDocuments(requirement: string) {
+    return documents.filter(
+      (document) =>
+        !links.some(
+          (link) =>
+            link.opportunity_id === opportunity.id &&
+            link.requirement === requirement &&
+            link.document_id === document.id,
+        ),
+    );
+  }
+
+  function suggestionsFor(requirement: string) {
+    return suggestDocumentsForRequirement(
+      requirement,
+      unlinkedDocuments(requirement).filter(
+        (document) =>
+          !dismissedSuggestionIds.has(`${requirement}\u0000${document.id}`),
+      ),
+    );
+  }
+
+  /** Documentos válidos que não aparecem como sugestão, para escolha manual. */
+  function reusableDocumentsFor(requirement: string) {
+    const today = new Date().toISOString().slice(0, 10);
+    const suggested = new Set(
+      suggestionsFor(requirement).map((suggestion) => suggestion.document.id),
+    );
+    return unlinkedDocuments(requirement).filter(
+      (document) =>
+        !suggested.has(document.id) &&
+        (!document.expires_at || document.expires_at >= today),
+    );
+  }
+
   function linkedDocuments(requirement: string) {
     return links
       .filter(
@@ -164,6 +204,14 @@ export function OpportunityDetail({
     setPending(true);
     setError("");
     try {
+      if (!aiConsent) {
+        const consentResult = await setAiConsentAction(true);
+        if (consentResult.error) {
+          setError(consentResult.error);
+          return;
+        }
+        setAiConsent(true);
+      }
       const response = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -280,21 +328,8 @@ export function OpportunityDetail({
                 fieldId={`requirement-${index}`}
                 requirement={requirement}
                 documents={linkedDocuments(requirement)}
-                suggestions={suggestDocumentsForRequirement(
-                  requirement,
-                  documents.filter(
-                    (document) =>
-                      !links.some(
-                        (link) =>
-                          link.opportunity_id === opportunity.id &&
-                          link.requirement === requirement &&
-                          link.document_id === document.id,
-                      ) &&
-                      !dismissedSuggestionIds.has(
-                        `${requirement}\u0000${document.id}`,
-                      ),
-                  ),
-                )}
+                suggestions={suggestionsFor(requirement)}
+                reusableDocuments={reusableDocumentsFor(requirement)}
                 onUploaded={addDocumentAssociation}
                 onLinked={addDocumentAssociation}
                 onUnlinked={(documentId) =>
@@ -352,13 +387,30 @@ export function OpportunityDetail({
               <button
                 className="button button-small"
                 type="button"
-                disabled={pending || !documentId}
+                disabled={pending || !documentId || (!aiConsent && !consentChecked)}
                 onClick={analyze}
               >
                 {pending ? "Analisando..." : "Analisar com IA"}
               </button>
             </div>
           </div>
+        )}
+        {!aiConsent && opportunityDocuments.length > 0 && (
+          <label className="toggle-row consent-row">
+            <input
+              type="checkbox"
+              checked={consentChecked}
+              onChange={(event) => setConsentChecked(event.target.checked)}
+            />
+            <span>
+              Autorizo enviar o texto dos meus documentos ao provedor de
+              inteligência artificial para esta análise, conforme a{" "}
+              <a href="/privacidade" target="_blank" rel="noreferrer">
+                Política de Privacidade
+              </a>
+              . Posso revogar na página Conta.
+            </span>
+          </label>
         )}
         {error && <p className="notice notice-error">{error}</p>}
         {currentAnalysis && <AnalysisDetails result={currentAnalysis.result} />}

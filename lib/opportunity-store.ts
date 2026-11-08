@@ -226,16 +226,75 @@ export async function closeMissingOpportunities(
   return count ?? 0;
 }
 
-/** Remove registros com prazo encerrado há muito tempo para manter a tabela pequena. */
+/**
+ * Remove oportunidades com prazo encerrado há muito tempo, preservando as que
+ * têm documentos vinculados ou análises (o histórico dos usuários).
+ */
 export async function pruneOldOpportunities(
   supabase: Client,
   olderThanDays = 90,
 ): Promise<number> {
   const cutoff = new Date(Date.now() - olderThanDays * 24 * 60 * 60 * 1000);
-  const { count, error } = await supabase
-    .from("opportunities")
-    .delete({ count: "exact" })
-    .lt("deadline", cutoff.toISOString());
+  const { data, error } = await supabase.rpc("prune_old_opportunities", {
+    p_cutoff: cutoff.toISOString(),
+  });
   if (error) throw error;
-  return count ?? 0;
+  return data ?? 0;
+}
+
+export type OpportunitySearch = {
+  categories: readonly OpportunityCategory[];
+  regions: readonly string[];
+  query?: string;
+  deadlineBefore?: Date | null;
+  order?: "relevancia" | "prazo" | "recentes";
+  page?: number;
+  pageSize?: number;
+};
+
+/**
+ * Busca paginada das oportunidades compatíveis com o perfil: filtro, ordem e
+ * paginação acontecem no banco; só a página pedida é carregada.
+ */
+export async function searchMatchingOpportunities(
+  supabase: Client,
+  userId: string,
+  {
+    categories,
+    regions,
+    query = "",
+    deadlineBefore = null,
+    order = "relevancia",
+    page = 1,
+    pageSize = 24,
+  }: OpportunitySearch,
+): Promise<{ opportunities: Opportunity[]; total: number }> {
+  if (categories.length === 0 || regions.length === 0) return { opportunities: [], total: 0 };
+  const { data, error } = await supabase.rpc("search_user_opportunities", {
+    p_user_id: userId,
+    p_categories: [...categories],
+    p_regions: [...regions],
+    p_query: query.trim() || null,
+    p_deadline_before: deadlineBefore?.toISOString() ?? null,
+    p_order: order,
+    p_limit: pageSize,
+    p_offset: (Math.max(page, 1) - 1) * pageSize,
+  });
+  if (error) throw error;
+  if (data.length === 0) return { opportunities: [], total: 0 };
+
+  const { data: rows, error: rowsError } = await supabase
+    .from("opportunities")
+    .select(opportunityColumns)
+    .in(
+      "id",
+      data.map((match) => match.opportunity_id),
+    );
+  if (rowsError) throw rowsError;
+  const rowsById = new Map((rows as OpportunityRow[]).map((row) => [row.id, row]));
+  const opportunities = data.flatMap((match) => {
+    const row = rowsById.get(match.opportunity_id);
+    return row ? [{ ...rowToOpportunity(row), matchScore: match.similarity }] : [];
+  });
+  return { opportunities, total: Number(data[0].total_count) };
 }

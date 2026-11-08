@@ -14,6 +14,8 @@ type Props = {
   requirement: string;
   documents: UserDocument[];
   suggestions: DocumentSuggestion<UserDocument>[];
+  /** Outros documentos válidos do usuário, para escolher manualmente. */
+  reusableDocuments?: UserDocument[];
   onUploaded: (
     document: UserDocument,
     association: UserDocumentOpportunityLink,
@@ -31,6 +33,7 @@ export function DocumentUploader({
   requirement,
   documents,
   suggestions,
+  reusableDocuments = [],
   onUploaded,
   onLinked,
   onUnlinked,
@@ -38,7 +41,11 @@ export function DocumentUploader({
   const formRef = useRef<HTMLFormElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [selectedDocumentId, setSelectedDocumentId] = useState("");
   const router = useRouter();
+  const selectedDocument = reusableDocuments.find(
+    (document) => document.id === selectedDocumentId,
+  );
 
   async function uploadDocument(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -152,6 +159,41 @@ export function DocumentUploader({
                 </button>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {reusableDocuments.length > 0 && (
+        <div className="document-reuse">
+          <label className="field-label" htmlFor={`reuse-${fieldId}`}>
+            Reutilizar um documento já enviado
+          </label>
+          <div className="document-reuse-row">
+            <select
+              id={`reuse-${fieldId}`}
+              className="input"
+              value={selectedDocumentId}
+              onChange={(event) => setSelectedDocumentId(event.target.value)}
+            >
+              <option value="">Escolha um documento…</option>
+              {reusableDocuments.map((document) => (
+                <option key={document.id} value={document.id}>
+                  {document.name} — {document.document_type}
+                </option>
+              ))}
+            </select>
+            <button
+              className="button button-secondary button-small"
+              type="button"
+              disabled={busy || !selectedDocument}
+              onClick={() => {
+                if (!selectedDocument) return;
+                setSelectedDocumentId("");
+                void reuseDocument(selectedDocument);
+              }}
+            >
+              Usar
+            </button>
           </div>
         </div>
       )}

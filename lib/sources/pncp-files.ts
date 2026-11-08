@@ -102,6 +102,20 @@ export async function listPncpFiles(
   return sortPncpFiles(files);
 }
 
+/**
+ * Os arquivos que seriam lidos agora (os `limit` primeiros, por prioridade)
+ * diferem dos lidos antes? Indica edital retificado ou anexos novos.
+ */
+export function haveEditalFilesChanged(
+  previousUrls: readonly string[],
+  latestFiles: readonly PncpFile[],
+  limit: number,
+) {
+  const latest = new Set(latestFiles.slice(0, limit).map((file) => file.url));
+  const previous = new Set(previousUrls);
+  return latest.size !== previous.size || [...latest].some((url) => !previous.has(url));
+}
+
 export class FileTooLargeError extends Error {}
 
 /**

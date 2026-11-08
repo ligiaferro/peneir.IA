@@ -11,6 +11,8 @@ import {
   maxItemsPerEmail,
 } from "@/lib/alert-email";
 import { listOpenOpportunities } from "@/lib/opportunity-store";
+import { refreshStaleProfileEmbeddings } from "@/lib/profile-embedding";
+import { buildUnsubscribeUrls, unsubscribeHeaders } from "@/lib/unsubscribe";
 import { brazilianStateCodes, normalizeStates } from "@/lib/states";
 import { createServiceClient } from "@/lib/supabase/admin";
 import type { Database } from "@/lib/supabase/database.types";
@@ -91,12 +93,12 @@ async function loadAuthUsers(supabase: ServiceClient) {
 async function loadAlertProfiles(supabase: ServiceClient) {
   const profiles: Pick<
     Database["public"]["Tables"]["profiles"]["Row"],
-    "id" | "full_name" | "categories" | "keywords" | "states"
+    "id" | "full_name" | "categories" | "keywords" | "states" | "products_services" | "embedding_model"
   >[] = [];
   for (let from = 0; ; from += readPageSize) {
     const { data, error } = await supabase
       .from("profiles")
-      .select("id, full_name, categories, keywords, states")
+      .select("id, full_name, categories, keywords, states, products_services, embedding_model")
       .eq("email_alerts", true)
       .order("id")
       .range(from, from + readPageSize - 1);
@@ -154,6 +156,9 @@ export async function GET(request: NextRequest) {
       { status: 502 },
     );
   }
+
+  // Perfis com vetor de um modelo antigo não encontrariam nada na busca.
+  await refreshStaleProfileEmbeddings(supabase, profiles);
 
   const newSince = Date.now() - newOpportunityWindowMs;
   const newOpportunities = openOpportunities.filter(
@@ -264,12 +269,16 @@ export async function GET(request: NextRequest) {
     claimed.sort((a, b) => a.deadline.localeCompare(b.deadline));
     const claimedIds = claimed.map((opportunity) => opportunity.id);
 
+    const unsubscribeUrls = buildUnsubscribeUrls(profile.id);
     if (emailsSent > 0) await sleep(delayBetweenEmailsMs);
     const { error: emailError } = await resend.emails.send({
       from: process.env.RESEND_FROM_EMAIL,
       to: authUser.email,
       subject: alertEmailSubject(claimed),
-      html: alertEmailHtml(profile.full_name || "Olá", claimed),
+      html: alertEmailHtml(profile.full_name || "Olá", claimed, {
+        unsubscribeUrl: unsubscribeUrls?.page,
+      }),
+      headers: unsubscribeHeaders(unsubscribeUrls),
     });
     emailsSent += 1;
 

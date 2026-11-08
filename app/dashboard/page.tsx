@@ -1,7 +1,9 @@
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 import Link from "next/link";
 import { OpportunityCard } from "@/components/opportunity-card";
 import { ProfileForm } from "@/components/profile-form";
+import { DashboardFiltersForm } from "@/components/dashboard-filters-form";
 import { SendAlertButton } from "@/components/send-alert-button";
 import { signOutAction } from "@/app/auth/actions";
 import { getSearchCategories } from "@/lib/opportunities";
@@ -10,17 +12,18 @@ import {
   type SuggestibleDocument,
 } from "@/lib/document-matching";
 import {
-  listMatchingOpportunities,
-  upsertOpportunities,
-} from "@/lib/opportunity-store";
-import { mapWithConcurrency } from "@/lib/concurrency";
-import { indexPendingOpportunities } from "@/lib/opportunity-indexing";
+  dashboardHref,
+  dashboardPageSize,
+  hasActiveFilters,
+  parseDashboardFilters,
+} from "@/lib/dashboard-filters";
+import { getOpportunityEditais, withEditalRequirements } from "@/lib/edital-store";
+import { getStaleStates, refreshLiveOpportunities } from "@/lib/live-refresh";
+import { searchMatchingOpportunities } from "@/lib/opportunity-store";
 import {
-  fetchOpenContratacoes,
-  mapPncpContratacao,
-  pncpDateParam,
-  type OpportunityRecord,
-} from "@/lib/sources/pncp";
+  hasStaleProfileEmbedding,
+  refreshStaleProfileEmbeddings,
+} from "@/lib/profile-embedding";
 import { brazilianStateCodes, normalizeStates } from "@/lib/states";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -32,8 +35,22 @@ import type {
 } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
+/** Margem para a atualização do PNCP feita em segundo plano (after). */
+export const maxDuration = 120;
 
-export default async function DashboardPage() {
+function formatAge(timestamp: number) {
+  const minutes = Math.max(0, Math.round((Date.now() - timestamp) / 60_000));
+  if (minutes < 1) return "agora há pouco";
+  if (minutes < 60) return `há ${minutes} min`;
+  const hours = Math.round(minutes / 60);
+  return hours < 24 ? `há ${hours} h` : `há ${Math.round(hours / 24)} dia(s)`;
+}
+
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const supabase = await createClient();
   const { data: authData, error: authError } = await supabase.auth.getUser();
   if (authError || !authData.user) redirect("/login");
@@ -63,6 +80,15 @@ export default async function DashboardPage() {
     states: profileResult.data.states ?? [],
     email_alerts: profileResult.data.email_alerts,
   };
+
+  // Vetor de um modelo de embeddings antigo: revetoriza para a busca voltar a
+  // funcionar (ela só compara vetores do mesmo modelo).
+  let profileEmbeddingOutdated = false;
+  if (hasStaleProfileEmbedding(profile)) {
+    const refreshed = await refreshStaleProfileEmbeddings(supabase, [profile]);
+    profileEmbeddingOutdated = refreshed.length === 0;
+  }
+
   const hasSearch =
     profile.categories.length > 0 ||
     profile.keywords.some((keyword) => keyword.trim().length > 0);
@@ -70,19 +96,61 @@ export default async function DashboardPage() {
   // Busca nos estados escolhidos; sem escolha, em todas as UFs coletadas.
   const matchStates =
     profile.states.length > 0 ? profile.states : brazilianStateCodes;
-  // A consulta ao vivo cobre só os estados escolhidos (ou os de PNCP_UFS), para
-  // caber no tempo de carregamento da página.
+  const filters = parseDashboardFilters(await searchParams, matchStates);
+
+  // Atualização ao vivo do PNCP: só para UFs com dados velhos e em segundo
+  // plano, para não atrasar a página. O resultado aparece no próximo acesso.
   const liveStates =
     profile.states.length > 0
       ? profile.states
       : normalizeStates((process.env.PNCP_UFS ?? "PE").split(",")).states;
-  let openOpportunities: Opportunity[];
+  let refreshScheduled = false;
+  let lastRefreshedAt: number | null = null;
+  if (hasSearch && searchCategories.includes("licitacoes") && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    try {
+      const freshness = await getStaleStates(supabase, liveStates);
+      lastRefreshedAt = freshness.lastRefreshedAt;
+      if (freshness.stale.length > 0) {
+        refreshScheduled = true;
+        after(async () => {
+          try {
+            await refreshLiveOpportunities(createServiceClient(), freshness.stale);
+          } catch (error) {
+            console.error("Background PNCP refresh failed.", {
+              error: error instanceof Error ? error.message : String(error),
+            });
+          }
+        });
+      }
+    } catch (error) {
+      console.error("Could not check PNCP data freshness.", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  let matches: Opportunity[];
+  let totalMatches: number;
   try {
-    openOpportunities = await listMatchingOpportunities(
+    const result = await searchMatchingOpportunities(supabase, profile.id, {
+      categories: searchCategories,
+      regions: filters.uf ? [filters.uf] : matchStates,
+      query: filters.query,
+      deadlineBefore: filters.deadlineDays
+        ? new Date(Date.now() + filters.deadlineDays * 24 * 60 * 60 * 1000)
+        : null,
+      order: filters.order,
+      page: filters.page,
+      pageSize: dashboardPageSize,
+    });
+    totalMatches = result.total;
+    // Os requisitos lidos do edital substituem a lista genérica nos cards.
+    const editais = await getOpportunityEditais(
       supabase,
-      profile.id,
-      searchCategories,
-      matchStates,
+      result.opportunities.map(({ id }) => id),
+    ).catch(() => new Map());
+    matches = result.opportunities.map((opportunity) =>
+      withEditalRequirements(opportunity, editais.get(opportunity.id) ?? null),
     );
   } catch (error) {
     const message =
@@ -93,117 +161,9 @@ export default async function DashboardPage() {
       `Não foi possível carregar as oportunidades: ${message}. Confira se todas as migrações foram executadas.`,
     );
   }
-  let pncpRefreshError = false;
-  let pncpWasQueried = false;
-  if (
-    hasSearch &&
-    searchCategories.includes("licitacoes")
-  ) {
-    const stopAt = Date.now() + 6_000;
-    const configuredDaysAhead = Number.parseInt(
-      process.env.PNCP_DAYS_AHEAD ?? "",
-      10,
-    );
-    const daysAhead =
-      Number.isInteger(configuredDaysAhead) && configuredDaysAhead > 0
-        ? Math.min(configuredDaysAhead, 365)
-        : 60;
-    const configuredConcurrency = Number.parseInt(
-      process.env.PNCP_CONCURRENCY ?? "",
-      10,
-    );
-    const concurrency =
-      Number.isInteger(configuredConcurrency) && configuredConcurrency > 0
-        ? Math.min(configuredConcurrency, 6)
-        : 3;
+  const totalPages = Math.max(1, Math.ceil(totalMatches / dashboardPageSize));
+  const filtered = hasActiveFilters(filters);
 
-    if (liveStates.length === 0) pncpRefreshError = true;
-    // Uma página por UF, com até `concurrency` UFs consultadas ao mesmo tempo.
-    const liveResults = await mapWithConcurrency(
-      liveStates,
-      concurrency,
-      async (uf): Promise<OpportunityRecord[]> => {
-        if (Date.now() + 1_000 >= stopAt) {
-          pncpRefreshError = true;
-          return [];
-        }
-        try {
-          pncpWasQueried = true;
-          const result = await fetchOpenContratacoes({
-            uf,
-            dataFinal: pncpDateParam(daysAhead),
-            maxPages: 1,
-            pageSize: 50,
-            delayMs: 0,
-            retryDelaysMs: [],
-            stopAt,
-            timeoutMs: Math.min(4_000, stopAt - Date.now()),
-            userAgent: `peneir.IA/0.1 (+${process.env.NEXT_PUBLIC_APP_URL ?? "https://peneir.ia"})`,
-          });
-          if (result.error) {
-            pncpRefreshError = true;
-            console.error("PNCP live dashboard query was incomplete.", {
-              uf,
-              error: result.error,
-            });
-          }
-          const fetchedAt = new Date().toISOString();
-          return result.items
-            .map((item) => mapPncpContratacao(item, fetchedAt, uf))
-            .filter((record): record is OpportunityRecord => record !== null);
-        } catch (error) {
-          pncpRefreshError = true;
-          console.error("PNCP live dashboard query failed.", {
-            uf,
-            error: error instanceof Error ? error.message : String(error),
-          });
-          return [];
-        }
-      },
-    );
-    const liveRecords = liveResults.flat();
-
-    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      pncpRefreshError = true;
-      console.error(
-        "Cannot persist and index live PNCP results without SUPABASE_SERVICE_ROLE_KEY.",
-      );
-    } else {
-      try {
-        const adminClient = createServiceClient();
-        if (liveRecords.length > 0) {
-          await upsertOpportunities(adminClient, liveRecords);
-        }
-        const liveIds = [...new Set(liveRecords.map(({ id }) => id))];
-        for (let start = 0; start < liveIds.length; start += 100) {
-          const indexing = await indexPendingOpportunities(adminClient, {
-            ids: liveIds.slice(start, start + 100),
-            limit: 100,
-          });
-          if (indexing.failed > 0) pncpRefreshError = true;
-        }
-        const pendingIndexing = await indexPendingOpportunities(adminClient, {
-          limit: 50,
-        });
-        if (pendingIndexing.failed > 0 || pendingIndexing.selected === 50) {
-          pncpRefreshError = true;
-        }
-        openOpportunities = await listMatchingOpportunities(
-          supabase,
-          profile.id,
-          searchCategories,
-          matchStates,
-        );
-      } catch (error) {
-        pncpRefreshError = true;
-        console.error("Could not index live PNCP opportunities.", {
-          error: error instanceof Error ? error.message : String(error),
-        });
-      }
-    }
-  }
-  const matches = openOpportunities;
-  const realMatches = matches.length;
   const priorDocuments: SuggestibleDocument[] = [];
   for (let offset = 0; ; offset += 1000) {
     const { data, error } = await supabase
@@ -230,44 +190,27 @@ export default async function DashboardPage() {
     ),
   );
   const linkedRequirementsByOpportunity = new Map<string, Set<string>>();
-  const opportunityIds = matches.map((opportunity) => opportunity.id);
-  const opportunityBatchSize = 100;
-  const linkPageSize = 1000;
-  for (
-    let start = 0;
-    start < opportunityIds.length;
-    start += opportunityBatchSize
-  ) {
-    const batch = opportunityIds.slice(start, start + opportunityBatchSize);
-    for (let offset = 0; ; offset += linkPageSize) {
-      const { data, error } = await supabase
-        .from("document_opportunities")
-        .select("opportunity_id, requirement")
-        .eq("user_id", authData.user.id)
-        .in("opportunity_id", batch)
-        .order("opportunity_id", { ascending: true })
-        .order("document_id", { ascending: true })
-        .order("requirement", { ascending: true })
-        .range(offset, offset + linkPageSize - 1);
-      if (error) {
-        throw new Error(
-          `Não foi possível carregar os documentos vinculados às oportunidades: ${error.message}`,
-        );
-      }
-      for (const link of data) {
-        const requirements =
-          linkedRequirementsByOpportunity.get(link.opportunity_id) ??
-          new Set<string>();
-        requirements.add(link.requirement);
-        linkedRequirementsByOpportunity.set(
-          link.opportunity_id,
-          requirements,
-        );
-      }
-      if (data.length < linkPageSize) break;
+  if (matches.length > 0) {
+    const { data: links, error: linksError } = await supabase
+      .from("document_opportunities")
+      .select("opportunity_id, requirement")
+      .eq("user_id", authData.user.id)
+      .in(
+        "opportunity_id",
+        matches.map((opportunity) => opportunity.id),
+      );
+    if (linksError) {
+      throw new Error(
+        `Não foi possível carregar os documentos vinculados às oportunidades: ${linksError.message}`,
+      );
+    }
+    for (const link of links) {
+      const requirements =
+        linkedRequirementsByOpportunity.get(link.opportunity_id) ?? new Set<string>();
+      requirements.add(link.requirement);
+      linkedRequirementsByOpportunity.set(link.opportunity_id, requirements);
     }
   }
-
   return (
     <div className="shell">
       <header className="topbar">
@@ -282,6 +225,9 @@ export default async function DashboardPage() {
               Minha empresa
             </Link>
           )}
+          <Link className="button button-secondary button-small" href="/conta">
+            Conta
+          </Link>
           <form action={signOutAction}>
             <button
               className="button button-secondary button-small"
@@ -324,7 +270,7 @@ export default async function DashboardPage() {
                 ? profile.user_kind === "empresa" ? "Completar dados da empresa →" : "Personalizar minha busca ↓"
                 : !profile.embedding_model
                   ? profile.user_kind === "empresa" ? "Completar dados da empresa →" : "Descrever minha atividade ↓"
-                  : `Ver ${matches.length} oportunidades para mim ↓`}
+                  : `Ver ${totalMatches} oportunidades para mim ↓`}
             </a>
           </div>
           <aside className="hero-aside">
@@ -382,13 +328,13 @@ export default async function DashboardPage() {
             <div>
               <h2>Oportunidades para você</h2>
               <p>
-                {matches.length}{" "}
-                {matches.length === 1 ? "licitação ativa" : "licitações ativas"}{" "}
+                {totalMatches}{" "}
+                {totalMatches === 1 ? "licitação ativa" : "licitações ativas"}{" "}
                 do PNCP
-                {profile.states.length > 0 && ` em ${profile.states.join(", ")}`},
-                ordenadas por score de similaridade. O percentual representa
-                similaridade semântica, não chance de contratação ou
-                habilitação.
+                {filtered ? " com os filtros escolhidos" : ""}
+                {!filtered && profile.states.length > 0 && ` em ${profile.states.join(", ")}`}.
+                O percentual representa similaridade semântica, não chance de
+                contratação ou habilitação.
               </p>
             </div>
             {matches.length > 0 && (
@@ -407,19 +353,26 @@ export default async function DashboardPage() {
               </p>
             )}
             <span className="badge">
-              {realMatches} do PNCP ·{" "}
-              {pncpRefreshError
-                ? "dados salvos e consulta pendente"
-                : pncpWasQueried
-                  ? "consultado ao carregar"
-                  : "atualizado pelo cron"}
+              {refreshScheduled
+                ? "Atualizando com o PNCP em segundo plano"
+                : lastRefreshedAt
+                  ? `PNCP atualizado ${formatAge(lastRefreshedAt)}`
+                  : "Atualizado pelo cron diário"}
             </span>
           </div>
-          {pncpRefreshError && (
-            <p className="notice">
-              Não foi possível atualizar todos os dados do PNCP agora. As
-              oportunidades já armazenadas continuam disponíveis.
+          {profileEmbeddingOutdated && (
+            <p className="notice notice-error">
+              O modelo de busca foi atualizado e não conseguimos refazer o seu
+              perfil agora. Salve o perfil novamente para voltar a ver
+              oportunidades.
             </p>
+          )}
+          {profile.embedding_model && (
+            <DashboardFiltersForm
+              filters={filters}
+              states={matchStates}
+              usesProfileStates={profile.states.length > 0}
+            />
           )}
           {profile.embedding_model && authData.user.email && (
             <SendAlertButton email={authData.user.email} />
@@ -433,10 +386,9 @@ export default async function DashboardPage() {
             </div>
           ) : matches.length === 0 ? (
             <div className="empty-state">
-              Nenhuma licitação ativa e indexada foi encontrada nas categorias
-              e estados selecionados. O PNCP é a fonte de licitações
-              conectada; ajuste categorias, palavras-chave ou estados do
-              perfil.
+              {filtered
+                ? "Nenhuma licitação corresponde aos filtros. Tente outros termos, outro estado ou um prazo maior."
+                : "Nenhuma licitação ativa e indexada foi encontrada nas categorias e estados selecionados. O PNCP é a fonte de licitações conectada; ajuste categorias, palavras-chave ou estados do perfil."}
             </div>
           ) : (
             <div className="opportunity-grid">
@@ -461,13 +413,42 @@ export default async function DashboardPage() {
               })}
             </div>
           )}
+          {totalPages > 1 && (
+            <nav className="pagination" aria-label="Páginas de oportunidades">
+              {filters.page > 1 ? (
+                <Link
+                  className="button button-secondary button-small"
+                  href={dashboardHref(filters, { page: filters.page - 1 })}
+                >
+                  ← Anteriores
+                </Link>
+              ) : (
+                <span />
+              )}
+              <span className="pagination-status">
+                Página {Math.min(filters.page, totalPages)} de {totalPages}
+              </span>
+              {filters.page < totalPages ? (
+                <Link
+                  className="button button-secondary button-small"
+                  href={dashboardHref(filters, { page: filters.page + 1 })}
+                >
+                  Próximas →
+                </Link>
+              ) : (
+                <span />
+              )}
+            </nav>
+          )}
         </section>
         )}
         <footer className="footer">
           Licitações coletadas do Portal Nacional de Contratações Públicas
           (PNCP). Confirme sempre os requisitos e prazos no edital original. A
           análise automatizada é apenas apoio e não substitui a conferência
-          humana.
+          humana.{" "}
+          <Link href="/privacidade">Privacidade</Link> ·{" "}
+          <Link href="/termos">Termos de uso</Link>
         </footer>
       </main>
     </div>
