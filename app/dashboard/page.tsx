@@ -24,7 +24,11 @@ import {
 import { getOpportunityEditais, withEditalRequirements } from "@/lib/edital-store";
 import { searchMatchingOpportunities } from "@/lib/opportunity-store";
 import { shouldAutomaticallyReadEdital } from "@/lib/edital-automation";
-import type { EditalStatus, OpportunityEdital } from "@/lib/edital-insights";
+import {
+  isEditalProcessingStale,
+  type EditalStatus,
+  type OpportunityEdital,
+} from "@/lib/edital-insights";
 import {
   hasStaleProfileEmbedding,
   refreshStaleProfileEmbeddings,
@@ -104,7 +108,10 @@ export default async function DashboardPage({
         result.opportunities.map(({ id }) => id),
       );
       for (const [id, edital] of editais) {
-        editalStatuses.set(id, edital.status);
+        // Leitura "em andamento" parada há muito tempo foi interrompida: trata
+        // como não lida, para ser retomada (se compatível) em vez de girar
+        // para sempre.
+        if (!isEditalProcessingStale(edital)) editalStatuses.set(id, edital.status);
       }
     } catch (error) {
       editalStatusUnavailable = true;

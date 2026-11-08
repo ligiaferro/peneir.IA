@@ -64,8 +64,25 @@ export type OpportunityEdital = {
   insights: EditalInsights | null;
   requirements: string[];
   processedAt: string | null;
+  /** Última atualização da linha; usada para detectar leituras interrompidas. */
+  updatedAt?: string | null;
   error: string | null;
 };
+
+/**
+ * Tempo após o qual uma leitura "em andamento" é considerada interrompida (o
+ * servidor reiniciou ou a função foi encerrada). Igual ao do banco em
+ * `claim_edital_processing`, que só então permite reservar a leitura de novo.
+ */
+export const editalProcessingStaleMs = 10 * 60 * 1000;
+
+export function isEditalProcessingStale(
+  edital: Pick<OpportunityEdital, "status" | "updatedAt">,
+  now = Date.now(),
+) {
+  if (edital.status !== "processing" || !edital.updatedAt) return false;
+  return now - new Date(edital.updatedAt).getTime() > editalProcessingStaleMs;
+}
 
 const maxRequirements = 40;
 const maxRequirementLength = 200;

@@ -16,7 +16,7 @@ export async function getOpportunityEdital(
 ): Promise<OpportunityEdital | null> {
   const { data, error } = await supabase
     .from("opportunity_editais")
-    .select("status, files, insights, requirements, processed_at, error")
+    .select("status, files, insights, requirements, processed_at, updated_at, error")
     .eq("opportunity_id", opportunityId)
     .maybeSingle();
   if (error) throw error;
@@ -27,6 +27,7 @@ export async function getOpportunityEdital(
     insights: (data.insights ?? null) as EditalInsights | null,
     requirements: data.requirements ?? [],
     processedAt: data.processed_at,
+    updatedAt: data.updated_at,
     error: data.error,
   };
 }
@@ -79,7 +80,7 @@ export async function getOpportunityEditais(supabase: Client, opportunityIds: st
   if (opportunityIds.length === 0) return editais;
   const { data, error } = await supabase
     .from("opportunity_editais")
-    .select("opportunity_id, status, files, insights, requirements, processed_at, error")
+    .select("opportunity_id, status, files, insights, requirements, processed_at, updated_at, error")
     .in("opportunity_id", opportunityIds);
   if (error) throw error;
   for (const row of data) {
@@ -89,6 +90,7 @@ export async function getOpportunityEditais(supabase: Client, opportunityIds: st
       insights: (row.insights ?? null) as EditalInsights | null,
       requirements: row.requirements ?? [],
       processedAt: row.processed_at,
+      updatedAt: row.updated_at,
       error: row.error,
     });
   }
