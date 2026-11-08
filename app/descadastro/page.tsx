@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { verifyUnsubscribeToken } from "@/lib/unsubscribe";
 import { UnsubscribeForm } from "./unsubscribe-form";
+import { BrandMark } from "@/components/brand-mark";
 
 export const metadata: Metadata = {
   title: "Cancelar alertas | peneir.IA",
@@ -21,7 +22,7 @@ export default async function UnsubscribePage({
     <main className="auth-shell">
       <section className="auth-card">
         <Link className="brand" href="/">
-          <span className="brand-mark">p.</span>
+          <BrandMark />
           peneir.IA
         </Link>
         {valid ? (

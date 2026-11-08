@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { BrandMark } from "@/components/brand-mark";
 
 /** E-mail de contato para assuntos de privacidade (encarregado de dados). */
 export function getContactEmail() {
@@ -28,7 +29,7 @@ export function LegalPage({
     <div className="shell">
       <header className="topbar">
         <Link className="brand" href="/">
-          <span className="brand-mark">p.</span>
+          <BrandMark />
           peneir.IA
         </Link>
         <div className="top-actions">

@@ -68,15 +68,10 @@ a {
 }
 
 .brand-mark {
-  display: grid;
+  display: block;
+  flex: none;
   width: 34px;
   height: 34px;
-  place-items: center;
-  border-radius: 12px;
-  background: var(--green);
-  color: white;
-  font-size: 19px;
-  letter-spacing: -2px;
 }
 
 .top-actions {

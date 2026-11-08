@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import Link from "next/link";
 import { signInAction, signUpAction, type AuthState } from "./actions";
+import { BrandMark } from "@/components/brand-mark";
 
 const initialState: AuthState = {};
 
@@ -30,7 +31,7 @@ export function AuthForm({
     <main className="auth-shell">
       <section className="auth-card">
         <Link className="brand" href="/">
-          <span className="brand-mark">p.</span>
+          <BrandMark />
           peneir.IA
         </Link>
         <h1>{isSignUp ? "Cadastre sua empresa." : "Boas-vindas de volta."}</h1>

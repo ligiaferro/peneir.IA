@@ -10,6 +10,7 @@ import {
   setEmailAlertsFormAction,
 } from "./actions";
 import { DeleteAccountForm } from "./delete-account-form";
+import { BrandMark } from "@/components/brand-mark";
 
 export const metadata: Metadata = { title: "Conta e privacidade | peneir.IA" };
 export const dynamic = "force-dynamic";
@@ -32,7 +33,7 @@ export default async function AccountPage() {
     <div className="shell">
       <header className="topbar">
         <Link className="brand" href="/dashboard">
-          <span className="brand-mark">p.</span>
+          <BrandMark />
           peneir.IA
         </Link>
         <div className="top-actions">

@@ -1,61 +1,142 @@
-# peneir.IA
+<!-- PROJECT LOGO -->
+<br />
+<p align="center">
+  <a href="#about-the-project">
+    <img src="./docs/assets/logo.svg" alt="Logo peneir.IA" width="15%">
+  </a>
 
-MVP para encontrar licitações públicas do [PNCP](https://pncp.gov.br/) (Portal Nacional de Contratações Públicas), comparar requisitos com os documentos do usuário e avisar sobre novas correspondências. Oportunidades sem fonte real conectada não são exibidas.
+  <h3 align="center">peneir.IA</h3>
 
-## Stack
+  <p align="center">
+    Um radar de licitações públicas para pequenas empresas: encontra os editais do PNCP que combinam com o seu negócio, lê o edital por você e mostra quais documentos você precisa ter em mãos.
+    <br />
+    <a href="#começando"><strong>Explore a documentação »</strong></a>
+    <br />
+    <br />
+    <a href="#screenshots">Screenshots</a>
+    ·
+    <a href="#funcionalidades">Funcionalidades</a>
+    ·
+    <a href="#roadmap">Roadmap</a>
+  </p>
+</p>
 
-- Next.js + TypeScript
-- Supabase Auth, Postgres com Row Level Security (RLS) e Storage privado
-- OpenAI Chat Completions para análise assistida de texto extraído de PDFs
-- Resend para alertas
-- API de consulta do PNCP para licitações
-- Vercel Cron para a coleta e os alertas diários
+<p align="center">
+  <img alt="Next.js" src="https://img.shields.io/badge/Next.js-15-black?logo=nextdotjs" />
+  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5-3178c6?logo=typescript&logoColor=white" />
+  <img alt="Supabase" src="https://img.shields.io/badge/Supabase-Postgres%20%2B%20pgvector-3ecf8e?logo=supabase&logoColor=white" />
+  <img alt="OpenAI" src="https://img.shields.io/badge/OpenAI-embeddings%20%2B%20chat-412991?logo=openai&logoColor=white" />
+  <img alt="Hackathon" src="https://img.shields.io/badge/Converge%20Challenge-powered%20by%20Tako-1b7159" />
+</p>
 
-## Configuração local
+<!-- TABLE OF CONTENTS -->
+<details open="open">
+  <summary><h2 style="display: inline-block">Índice</h2></summary>
+  <ol>
+    <li><a href="#contributors">Equipe</a></li>
+    <li>
+      <a href="#about-the-project">Sobre o projeto</a>
+      <ul>
+        <li><a href="#built-with">Tecnologias</a></li>
+      </ul>
+    </li>
+    <li><a href="#screenshots">Screenshots</a></li>
+    <li><a href="#funcionalidades">Funcionalidades</a></li>
+    <li><a href="#a-ia-no-produto">A IA no produto</a></li>
+    <li><a href="#começando">Começando</a></li>
+    <li><a href="#roadmap">Roadmap</a></li>
+  </ol>
+</details>
 
-1. Instale Node.js 20.9+ e execute `npm install`.
-2. Crie um projeto Supabase e obtenha a URL e a chave pública em **Settings → API Keys**.
-3. Configure `.env.local` a partir de `.env.example`, incluindo `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` e `DATABASE_URL` com uma URI de conexão Postgres do Supabase. O usuário do banco precisa ter permissão para criar tabelas, funções e políticas; use a conexão direta ou um pooler de sessão. A aplicação executa migrações pendentes ao iniciar.
-4. Configure `SUPABASE_SERVICE_ROLE_KEY` com a chave secreta do projeto para os crons e para persistir/indexar as oportunidades consultadas ao vivo no painel; ela só é usada no servidor e nunca deve usar o prefixo `NEXT_PUBLIC_`.
-5. Em **Authentication → URL Configuration** do Supabase, defina a **Site URL** (`http://localhost:3000` no desenvolvimento, o domínio público em produção) e inclua `http://localhost:3000/auth/callback` e `https://<seu-domínio>/auth/callback` em **Redirect URLs**. O cadastro cria a conta já confirmada e inicia a sessão imediatamente, sem enviar confirmação por e-mail. `SUPABASE_SERVICE_ROLE_KEY` é necessária para criar contas e deve permanecer somente no servidor. `NEXT_PUBLIC_APP_URL` deve apontar para a URL pública do app para que os links de recuperação de senha funcionem.
+## [Contributors](https://github.com/ThalesBezerra21)
 
-   Para a **recuperação de senha** (`/recuperar-senha`), o link do e-mail volta para `/auth/callback?next=/redefinir-senha`, onde a pessoa define a nova senha. Para funcionar em qualquer dispositivo, troque o link do template **Reset Password** por `{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=recovery&next=/redefinir-senha`.
-6. Configure `RESEND_FROM_EMAIL` com um remetente/domínio verificado no Resend e `OPENAI_API_KEY` para habilitar análise e busca semântica. A busca requer que `OPENAI_BASE_URL` aceite `/embeddings` e o parâmetro `dimensions: 1536`; Chat Completions é usado apenas quando alguém solicita análise de documento. `OPENAI_EMBEDDING_MODEL` define o modelo de vetores (padrão `text-embedding-3-small`). O perfil e os textos de origem das licitações são vetorizados com esse mesmo modelo e dimensão. PDFs digitalizados sem texto selecionável precisam de OCR antes da análise.
-7. Rode `npm run dev` e abra `http://localhost:3000`.
+<table width="100%" align="center">
+  <tr>
+    <td align="center"><a href="https://github.com/ThalesBezerra21"><img src="https://github.com/ThalesBezerra21.png?size=100" width="100px;" alt=""/><br /><sub><b>Thales Bezerra</b></sub></a><br/></td>
+    <td align="center"><a href="https://github.com/nathaliafab"><img src="https://avatars.githubusercontent.com/u/74332487?v=4" width="100px;" alt=""/><br /><sub><b>Nathalia Barbosa</b></sub></a><br/></td>
+    <td align="center"><a href="https://github.com/kauagabr"><img src="https://github.com/kauagabr.png?size=100" width="100px;" alt=""/><br /><sub><b>Kauã Gabriel</b></sub></a><br/></td>
+    <td align="center"><a href="https://github.com/ligiaferro"><img src="https://github.com/ligiaferro.png?size=100" width="100px;" alt=""/><br /><sub><b>Ligia Ferro</b></sub></a><br/></td>
+  </tr>
+</table>
 
-As migrações são aplicadas no início do servidor Node.js em uma transação protegida por advisory lock, com histórico em `public.app_schema_migrations`. Em schemas já existentes, a aplicação reconhece e registra `0001_initial_schema.sql` se o schema base estiver completo antes de aplicar novas migrações. Configure `DATABASE_URL` nos ambientes de desenvolvimento e produção com a URI PostgreSQL do Supabase (a conexão direta ou pooler de sessão, com SSL); sem ela, o servidor não inicia. Os arquivos SQL são incluídos nas funções de produção. As operações de usuários usam o cliente Supabase com a sessão autenticada e as políticas RLS. A chave `SUPABASE_SERVICE_ROLE_KEY` é usada pelos crons para gravar as oportunidades coletadas, listar contas autenticadas e processar alertas, e pelo painel para persistir os resultados PNCP consultados ao vivo; ela ignora RLS, portanto mantenha-a privada e limitada a ambientes de servidor.
+## About The Project
 
-Sem as variáveis públicas do Supabase, a aplicação não consegue autenticar, acessar o Storage nem consultar o banco. Os crons também precisam de `SUPABASE_SERVICE_ROLE_KEY`. As integrações OpenAI e Resend falham explicitamente quando solicitadas sem configuração.
+**peneir.IA** foi desenvolvido para o hackathon **Converge Challenge powered by Tako**. Ele ajuda micro, pequenas e médias empresas a participar de licitações públicas sem passar horas navegando em portais.
 
-## Fluxo do MVP
+As compras públicas brasileiras publicam milhares de editais por dia no [PNCP](https://pncp.gov.br/) (Portal Nacional de Contratações Públicas). Para uma pequena empresa, três coisas travam a participação: **achar** o edital certo no meio de um volume enorme, **entender** o que ele exige (PDFs longos, muitas vezes dentro de ZIPs) e **manter a documentação de habilitação em dia**. O peneir.IA conecta essas três etapas em um só fluxo:
 
-1. Pessoas podem se cadastrar pela tela de acesso. Empresas têm uma tela própria em `/cadastro-empresa`; depois do cadastro, os dados e documentos ficam disponíveis em `/empresa`.
-2. Descreva os produtos e serviços fornecidos pela empresa e escolha categorias e palavras-chave. Clique em uma oportunidade para abrir sua página de detalhes, que tem um campo de envio para cada documento solicitado. Para cada requisito, o sistema pode sugerir arquivos anteriores do usuário por correspondência de tipo/nome, sem ler o conteúdo do PDF; arquivos vencidos não são sugeridos. A pessoa confirma explicitamente quando quer reutilizar um arquivo privado existente ou pode enviar outro PDF (até 4 MB). Cada arquivo fica associado à oportunidade e ao requisito escolhido. A página da empresa reúne os documentos enviados e usados em análises, com edição dos metadados e remoção.
-3. O sistema gera embeddings diretamente do título, objeto/resumo e tags de origem de cada licitação do PNCP, sem uma chamada de Chat Completions por oportunidade. O perfil da empresa também é vetorizado; o painel mostra todas as licitações ativas e indexadas nas categorias e UFs selecionadas, sem corte mínimo de similaridade, ordenadas por score. Cada card informa a similaridade semântica em porcentagem e destaca scores acima de 80% como **Ótima match**; esse score não representa probabilidade de contratação ou habilitação. Itens sem vetor válido não são exibidos. As migrações criam os campos, extensão e função pgvector. Ao carregar o painel com Licitações selecionada, o servidor consulta a primeira página do PNCP nos estados de atuação do perfil (ou nas UFs de `PNCP_UFS`, se nenhum estiver marcado e a variável existir), até `PNCP_CONCURRENCY` UFs ao mesmo tempo, e persiste/indexa as oportunidades ainda não processadas (requer `SUPABASE_SERVICE_ROLE_KEY`), mesmo que o usuário ainda não tenha enviado documentos ou gerado o vetor do perfil. O painel libera as oportunidades depois que o perfil é vetorizado; documentos são enviados por oportunidade, sem bloquear a busca. A busca também tenta processar lotes pendentes já salvos. Se o PNCP ou a indexação falhar, os resultados válidos já salvos continuam disponíveis e o painel exibe um aviso. Ao carregar um card de licitação sem leitura anterior, a leitura do edital começa automaticamente se a similaridade superar `EDITAL_AUTO_READ_MIN_SIMILARITY_PERCENT` (padrão 50%). A página da oportunidade não inicia a leitura sozinha: use o botão para iniciar ou refazer a leitura. O texto dos documentos pessoais só é enviado à IA quando você solicita uma análise.
-4. O alerta diário envia um único e-mail por usuário com oportunidades semanticamente compatíveis vistas pela primeira vez nos últimos 3 dias e ainda dentro do prazo (até 20 listadas; o restante fica no painel). O banco deduplica por usuário e oportunidade e recupera reservas de envio abandonadas após 15 minutos.
-5. **Leitura do edital:** ao carregar um card pela primeira vez, se a similaridade superar `EDITAL_AUTO_READ_MIN_SIMILARITY_PERCENT` (padrão 50%), o servidor busca os arquivos da compra na API do PNCP (`/orgaos/{cnpj}/compras/{ano}/{sequencial}/arquivos`), baixa até 4 arquivos em ordem de prioridade (edital, aviso de contratação direta, termo de referência…; até 25 MB cada), extrai o texto dos PDFs, inclusive dentro de ZIP (um nível de ZIP aninhado), e pede à IA um resumo, pontos-chave (critério de julgamento, sessão, ME/EPP, garantia, visita técnica etc.), alertas e a lista de documentos exigidos com o item do edital. A página da oportunidade não dispara a leitura automaticamente: oferece um botão para iniciar ou, se a leitura já foi concluída, refazê-la. O resultado fica em `public.opportunity_editais` (migrações `0008` e `0011`) e é reaproveitado por todos os usuários; a coleta diária não o sobrescreve. Os requisitos exibidos e usados na análise vêm exclusivamente do edital extraído; se não houver exigências identificadas, nenhum requisito genérico será apresentado. A leitura roda em segundo plano (`after`) e cards/página mostram o andamento; uma reserva no banco evita leituras duplicadas. Ao abrir uma oportunidade com edital já lido, o servidor verifica no PNCP, no máximo a cada 12 h, se há arquivos novos (retificação) e relê o edital. RAR e PDFs digitalizados sem texto não são lidos. Requer `OPENAI_API_KEY` e `SUPABASE_SERVICE_ROLE_KEY`; `OPENAI_EDITAL_MODEL` permite um modelo diferente (mais rápido) só para essa leitura.
-6. **Painel:** busca por texto (sem diferenciar acentos), filtros por estado e prazo, ordenação (compatibilidade, prazo, publicação) e paginação de 24 itens, tudo feito no banco (`search_user_opportunities`, migração `0009`). A consulta ao vivo ao PNCP só roda para UFs com dados de mais de 30 minutos e em segundo plano (`after`), sem atrasar a página. Se o `OPENAI_EMBEDDING_MODEL` mudar, os perfis são revetorizados automaticamente no painel, no cron de alertas e no envio imediato.
-7. **Privacidade e LGPD:** páginas `/privacidade` e `/termos` (contato em `NEXT_PUBLIC_CONTACT_EMAIL`); aceite dos termos obrigatório no cadastro (`profiles.terms_accepted_at`); consentimento antes de enviar documentos à IA (`profiles.ai_consent_at`, exigido por `/api/analyze`); página `/conta` para ativar/desativar alertas, revogar o consentimento, baixar os dados (`/api/conta/exportar`, JSON) e excluir a conta (apaga os arquivos e o usuário; o restante cai em cascata). Os textos legais são um ponto de partida e devem ser revisados por assessoria jurídica.
-8. **Descadastro:** todo e-mail de alerta traz um link assinado (HMAC com `UNSUBSCRIBE_SECRET`, ou `CRON_SECRET`) para `/descadastro`, que pede confirmação, e os cabeçalhos `List-Unsubscribe`/`List-Unsubscribe-Post` para o descadastro com um clique em `/api/descadastro` (RFC 8058). Exige `NEXT_PUBLIC_APP_URL`.
-9. A limpeza diária apaga oportunidades encerradas há mais de 90 dias, exceto as que têm documentos vinculados ou análises (`prune_old_opportunities`).
-10. Para demonstração, o botão **Enviar e-mail agora**, na seção de oportunidades do painel, envia na hora para o e-mail da conta os até 20 editais abertos mais relevantes (mesmo matching, similaridade mínima e estados do painel, sem a restrição de "novos nos últimos 3 dias"). Esse envio não é registrado em `notification_deliveries`, então não interfere no alerta diário. Exige `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, e-mail confirmado e perfil vetorizado; há um intervalo de 60 s entre envios do mesmo usuário.
+- **Perfil por CNPJ:** a empresa informa o CNPJ e o perfil é montado com os dados públicos da Receita Federal. A pessoa confere, edita e salva.
+- **Busca semântica:** o perfil e cada licitação viram vetores, e o painel ordena os editais pela compatibilidade real com o que a empresa vende.
+- **Leitura do edital por IA:** resumo, condições principais e a **lista de documentos exigidos**, extraídos dos arquivos oficiais.
+- **Documentos e análise:** envio por requisito e análise assistida por IA, com evidências e avisos de validade.
+- **Alertas:** um e-mail diário com as oportunidades novas que combinam com o perfil.
 
-## Agendamento
+> O peneir.IA é uma ferramenta de apoio. Ele **não** declara habilitação, validade legal nem aprovação. O edital oficial sempre prevalece, e cada card tem link para a publicação original.
 
-`vercel.json` configura duas chamadas diárias (horários em UTC):
+### Built With
 
-- `/api/cron/sync-opportunities` (10h): coleta no PNCP as contratações com recebimento de propostas aberto e prazo até `PNCP_DAYS_AHEAD` dias (padrão 60), grava em `public.opportunities` e marca como encerradas as que saíram da listagem. As UFs coletadas são as de `PNCP_UFS` (opcional; sem ela, só as dos perfis) somadas aos estados de atuação escolhidos nos perfis de quem acompanha licitações. Até `PNCP_CONCURRENCY` UFs (padrão 3, máximo 6) são consultadas ao mesmo tempo; dentro de cada UF as páginas são lidas em sequência com pausa de 1,5 s e retentativas, porque a API do PNCP limita requisições (HTTP 429). Cada UF leva cerca de 2 s por página de 50 itens (PE: ~14 páginas, ~30 s). `PNCP_MAX_PAGES` (padrão 20) limita páginas por UF; se a listagem não for lida inteira, nada é encerrado naquela UF. A função tem `maxDuration` de 300 s: as UFs de `PNCP_UFS` vêm primeiro, e as que não começarem a tempo aparecem com erro na resposta. Depois da coleta, as oportunidades pendentes de todas as UFs são vetorizadas em lotes de 100 (uma única etapa, para as UFs em paralelo não vetorizarem as mesmas linhas).
-- Estados de atuação: no perfil, o usuário marca uma ou mais UFs (coluna `profiles.states`, migração `0007`). O matching semântico do painel e dos alertas por e-mail considera só oportunidades dessas UFs; sem UF marcada, valem todos os estados coletados.
-- `/api/cron/opportunities` (12h): envia os alertas por e-mail.
+* [Next.js 15](https://nextjs.org/) e [React 19](https://react.dev/)
+* [TypeScript](https://www.typescriptlang.org/)
+* [Supabase](https://supabase.com/): Auth, Postgres com Row Level Security, Storage privado e [pgvector](https://github.com/pgvector/pgvector)
+* [OpenAI](https://platform.openai.com/docs): embeddings e Chat Completions
+* [Resend](https://resend.com/) para os alertas por e-mail
+* [PNCP](https://pncp.gov.br/api/consulta/swagger-ui/index.html) e [BrasilAPI](https://brasilapi.com.br/) como fontes de dados
+* [Vercel Cron](https://vercel.com/docs/cron-jobs) para a coleta e os alertas diários
+* [Vitest](https://vitest.dev/) para testes
 
-Em produção, configure `CRON_SECRET` no ambiente da Vercel; os endpoints exigem `Authorization: Bearer <CRON_SECRET>`. Ambos usam o cliente Supabase com `SUPABASE_SERVICE_ROLE_KEY` no servidor; o de alertas usa o Resend para entrega. Em desenvolvimento, acione-os manualmente, por exemplo:
+## Funcionalidades
 
-```bash
-curl -H "Authorization: Bearer $CRON_SECRET" http://localhost:3000/api/cron/sync-opportunities
-```
+| Área | O que existe hoje |
+|---|---|
+| **Cadastro e perfil** | Conta de empresa, **preenchimento do perfil por CNPJ** com edição manual, palavras-chave e **seleção de estados com atalhos** (todos, limpar, inverter e por região) |
+| **Busca** | Similaridade semântica, busca por texto sem diferenciar acentos, filtros de estado e prazo, ordenação por compatibilidade, prazo ou publicação, e selo **Ótima match** acima de 80% |
+| **Leitura do edital** | Leitura automática em segundo plano dos editais compatíveis, com resumo, condições (critério de julgamento, ME/EPP, garantia, visita técnica…), alertas e requisitos com o item do edital. Relê quando o PNCP publica arquivos novos |
+| **Documentos** | Envio de PDF por requisito, sugestão de arquivos já enviados (sem vencidos), edição e remoção na página da empresa |
+| **Análise por IA** | Comparação documento × requisitos, extração e conferência de validade |
+| **Alertas** | E-mail diário, envio imediato para demonstração e descadastro com um clique |
+| **Privacidade (LGPD)** | Consentimento antes de enviar documentos à IA, exportação dos dados em JSON e exclusão da conta |
 
-## Verificações
+## A IA no produto
 
-- `npm test` executa testes unitários de compatibilidade, seleção de oportunidades e do cliente do PNCP.
-- `npm run lint` executa ESLint.
-- `npm run build` valida a compilação de produção.
+| Onde | O que a IA faz |
+|---|---|
+| **Embeddings** | Transforma o perfil e cada licitação em vetores para a busca por similaridade |
+| **Onboarding por CNPJ** | Reescreve as atividades (CNAE) da empresa como produtos e serviços fornecidos ao governo e sugere palavras-chave |
+| **Leitura do edital** | Extrai resumo, condições, alertas e a lista de documentos exigidos a partir dos PDFs do PNCP |
+| **Análise de documento** | Compara o texto de um documento com os requisitos do edital, com evidências e avisos de validade |
+
+## Começando
+
+**Pré-requisitos:** Node.js 20.9+, um projeto no [Supabase](https://supabase.com/) e uma chave de API da OpenAI (ou de um provedor compatível com `/embeddings`). A conta no [Resend](https://resend.com/) é opcional e só serve para os e-mails.
+
+1. Instale as dependências e copie o arquivo de exemplo:
+
+   ```bash
+   npm install
+   cp .env.example .env.local
+   ```
+
+2. Preencha o `.env.local`. As variáveis essenciais são:
+
+   | Variável | Para quê |
+   |---|---|
+   | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Conexão com o Supabase |
+   | `SUPABASE_SERVICE_ROLE_KEY` | Chave secreta, só no servidor (crons e criação de contas) |
+   | `DATABASE_URL` | URI Postgres do Supabase, usada para aplicar as migrações |
+   | `OPENAI_API_KEY` | Busca semântica, leitura de edital e análise |
+   | `NEXT_PUBLIC_APP_URL` | URL pública do app (`http://localhost:3000` em desenvolvimento) |
+   | `RESEND_API_KEY`, `RESEND_FROM_EMAIL` | Alertas por e-mail (opcional) |
+
+   As demais variáveis (modelos, limites e UFs coletadas) têm padrões e estão comentadas no [.env.example](.env.example).
+
+3. No Supabase, em **Authentication → URL Configuration**, defina a **Site URL** e inclua `http://localhost:3000/auth/callback` em **Redirect URLs**.
+
+4. Inicie o servidor e abra [http://localhost:3000](http://localhost:3000):
+
+   ```bash
+   npm run dev
+   ```
+
+As migrações (`supabase/migrations`) são aplicadas automaticamente ao iniciar o servidor. Ao criar uma migração nova, reinicie o servidor. Para rodar os testes: `npm test`.
+
+<p align="right"><a href="#top">voltar ao topo ↑</a></p>

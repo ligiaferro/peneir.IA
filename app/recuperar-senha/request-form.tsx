@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import Link from "next/link";
 import { requestPasswordResetAction, type AuthState } from "@/app/auth/actions";
+import { BrandMark } from "@/components/brand-mark";
 
 export function PasswordResetRequestForm() {
   const [state, formAction, pending] = useActionState<AuthState, FormData>(
@@ -14,7 +15,7 @@ export function PasswordResetRequestForm() {
     <main className="auth-shell">
       <section className="auth-card">
         <Link className="brand" href="/">
-          <span className="brand-mark">p.</span>
+          <BrandMark />
           peneir.IA
         </Link>
         <h1>Recuperar senha.</h1>

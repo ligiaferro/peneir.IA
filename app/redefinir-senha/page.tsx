@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { NewPasswordForm } from "./new-password-form";
+import { BrandMark } from "@/components/brand-mark";
 
 export const metadata: Metadata = { title: "Nova senha | peneir.IA" };
 export const dynamic = "force-dynamic";
@@ -15,7 +16,7 @@ export default async function NewPasswordPage() {
       <main className="auth-shell">
         <section className="auth-card">
           <Link className="brand" href="/">
-            <span className="brand-mark">p.</span>
+            <BrandMark />
             peneir.IA
           </Link>
           <h1>Link expirado.</h1>

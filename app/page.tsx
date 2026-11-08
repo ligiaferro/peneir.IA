@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { createClient } from "@/lib/supabase/server";
+import { BrandMark } from "@/components/brand-mark";
 
 export const metadata: Metadata = {
   title: "peneir.IA | O edital certo, antes do prazo",
@@ -169,7 +170,7 @@ export default async function HomePage({
       <header className="lp-header">
         <div className="shell lp-header-inner">
           <Link className="brand" href="/">
-            <span className="brand-mark">p.</span>
+            <BrandMark />
             peneir.IA
           </Link>
           <nav aria-label="Seções da página" className="lp-nav">
@@ -474,7 +475,7 @@ export default async function HomePage({
 
       <footer className="shell lp-footer">
         <Link className="brand" href="/">
-          <span className="brand-mark">p.</span>
+          <BrandMark />
           peneir.IA
         </Link>
         <p>

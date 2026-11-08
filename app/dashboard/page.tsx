@@ -36,6 +36,7 @@ import {
 import { brazilianStateCodes } from "@/lib/states";
 import { createClient } from "@/lib/supabase/server";
 import type { Opportunity } from "@/lib/types";
+import { BrandMark } from "@/components/brand-mark";
 
 export const dynamic = "force-dynamic";
 /** Margem para o que roda em segundo plano (after): atualização do PNCP e leitura de editais. */
@@ -163,7 +164,7 @@ export default async function DashboardPage({
     <div className="shell">
       <header className="topbar">
         <a className="brand" href="/dashboard">
-          <span className="brand-mark">p.</span>
+          <BrandMark />
           peneir.IA
         </a>
         <div className="top-actions">

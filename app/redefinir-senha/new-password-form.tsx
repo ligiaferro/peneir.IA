@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import Link from "next/link";
 import { updatePasswordAction, type AuthState } from "@/app/auth/actions";
+import { BrandMark } from "@/components/brand-mark";
 
 export function NewPasswordForm({ email }: { email: string }) {
   const [state, formAction, pending] = useActionState<AuthState, FormData>(
@@ -14,7 +15,7 @@ export function NewPasswordForm({ email }: { email: string }) {
     <main className="auth-shell">
       <section className="auth-card">
         <Link className="brand" href="/">
-          <span className="brand-mark">p.</span>
+          <BrandMark />
           peneir.IA
         </Link>
         <h1>Crie uma nova senha.</h1>
