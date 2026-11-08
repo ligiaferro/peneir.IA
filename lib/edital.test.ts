@@ -63,7 +63,7 @@ describe("withEditalRequirements", () => {
     requirementsAreGeneric: true,
   } as Opportunity;
 
-  it("replaces the generic list once the edital was read", () => {
+  it("uses only the requirements extracted from the edital", () => {
     const result = withEditalRequirements(opportunity, {
       status: "ready",
       files: [],
@@ -88,11 +88,19 @@ describe("withEditalRequirements", () => {
     expect(result.requirements).toEqual(["CNDT"]);
   });
 
-  it("keeps the generic list otherwise", () => {
-    expect(withEditalRequirements(opportunity, null)).toBe(opportunity);
+  it("uses an empty list when the completed reading found no requirements", () => {
     expect(
       withEditalRequirements(opportunity, {
         status: "ready", files: [], insights: null, requirements: [], processedAt: null, error: null,
+      }),
+    ).toMatchObject({ requirements: [], requirementsAreGeneric: false });
+  });
+
+  it("keeps the generic list when the edital is not ready", () => {
+    expect(withEditalRequirements(opportunity, null)).toBe(opportunity);
+    expect(
+      withEditalRequirements(opportunity, {
+        status: "processing", files: [], insights: null, requirements: [], processedAt: null, error: null,
       }),
     ).toBe(opportunity);
   });

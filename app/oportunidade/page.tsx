@@ -36,7 +36,7 @@ export default async function OpportunityPage({
   ] =
     await Promise.all([
       getOpportunityById(supabase, opportunityId),
-      // Sem a migração do edital, a página segue com a lista genérica.
+      // Sem a migração do edital, a página segue sem requisitos extraídos.
       getOpportunityEdital(supabase, opportunityId).catch(() => null),
       supabase
         .from("profiles")

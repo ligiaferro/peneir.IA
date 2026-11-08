@@ -154,7 +154,7 @@ Extraia somente o que estiver escrito no texto; não invente nem complete com co
 Responda somente com um objeto JSON válido, sem Markdown, com:
 - "resumo": 2 a 4 frases sobre o que está sendo contratado e as condições principais.
 - "campos": objeto com as chaves ${Object.keys(editalFieldLabels).join(", ")}; cada valor é uma frase curta ou null.
-- "requisitos": lista dos documentos que o licitante precisa apresentar (habilitação jurídica, regularidade fiscal/social/trabalhista, qualificação econômico-financeira, qualificação técnica, proposta e declarações). Cada item: {"documento": nome curto e específico do documento, "categoria": uma de ${Object.keys(editalRequirementCategories).join(", ")}, "detalhe": exigência específica (valores, quantidades, prazos de validade) e o item do edital quando houver, ou null}. Um documento por item, sem repetir.
+- "requisitos": lista somente dos documentos e declarações expressamente exigidos no texto para habilitação ou apresentação da proposta. Não inclua requisitos usuais com base na lei ou em conhecimento externo; não deduza exigências. Cada item: {"documento": nome curto e específico do documento, "categoria": uma de ${Object.keys(editalRequirementCategories).join(", ")}, "detalhe": exigência específica (valores, quantidades, prazos de validade) e o item do edital quando houver, ou null}. Um documento por item, sem repetir. Se o texto não trouxer requisitos, use uma lista vazia.
 - "alertas": até 6 pontos de atenção para quem vai participar (exigências incomuns, prazos curtos, garantias, visita obrigatória, restrições de participação). Lista vazia se não houver.`;
 
 export async function extractEditalInsights(

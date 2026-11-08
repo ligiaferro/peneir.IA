@@ -22,7 +22,7 @@ export type Opportunity = {
   tags: string[];
   matchScore?: number;
   requirements: string[];
-  /** true quando os requisitos são uma lista genérica e não foram lidos do edital. */
+  /** true enquanto os requisitos do edital ainda não foram extraídos. */
   requirementsAreGeneric: boolean;
   /** Data e hora de encerramento (ISO 8601). */
   deadline: string;

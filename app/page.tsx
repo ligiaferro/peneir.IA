@@ -316,7 +316,7 @@ export default async function HomePage({
           </div>
           <div>
             <strong>Lei 14.133</strong>
-            <span>requisitos usuais de habilitação</span>
+            <span>requisitos extraídos do edital</span>
           </div>
           <div>
             <strong>27 UFs</strong>

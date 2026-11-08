@@ -31,10 +31,7 @@ export async function getOpportunityEdital(
   };
 }
 
-/**
- * Há requisitos lidos do edital. Durante uma releitura (status "processing"),
- * continuam valendo os da leitura anterior.
- */
+/** Há requisitos extraídos disponíveis, inclusive durante uma releitura. */
 function hasUsableRequirements(
   edital: OpportunityEdital | null,
 ): edital is OpportunityEdital {
@@ -45,15 +42,14 @@ function hasUsableRequirements(
   );
 }
 
-/**
- * Usa os documentos extraídos do edital no lugar da lista genérica, quando a
- * leitura terminou e encontrou requisitos.
- */
+/** Usa os requisitos extraídos, inclusive uma lista vazia após leitura concluída. */
 export function withEditalRequirements(
   opportunity: Opportunity,
   edital: OpportunityEdital | null,
 ): Opportunity {
-  if (!hasUsableRequirements(edital)) return opportunity;
+  if (!edital || (edital.status !== "ready" && !hasUsableRequirements(edital))) {
+    return opportunity;
+  }
   return {
     ...opportunity,
     requirements: edital.requirements,
@@ -62,9 +58,8 @@ export function withEditalRequirements(
 }
 
 /**
- * Requisitos aceitos para vincular documentos: os gravados na oportunidade
- * (lista genérica) e os extraídos do edital. Mantém os genéricos para que
- * vínculos feitos antes da leitura continuem válidos.
+ * Requisitos aceitos para vincular documentos: os gravados na oportunidade e
+ * os extraídos do edital. Mantém vínculos existentes após a leitura.
  */
 export async function getAcceptedRequirements(
   supabase: Client,

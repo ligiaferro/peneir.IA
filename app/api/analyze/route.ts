@@ -99,7 +99,7 @@ export async function POST(request: NextRequest) {
     const [opportunityResult, editalResult, documentResult, associationResult] =
       await Promise.all([
         getOpportunityById(supabase, opportunityId),
-        // Sem a migração do edital, a análise segue com a lista genérica.
+        // Sem a migração do edital, a análise segue sem requisitos extraídos.
         getOpportunityEdital(supabase, opportunityId).catch(() => null),
         supabase
           .from("documents")
@@ -214,7 +214,7 @@ export async function POST(request: NextRequest) {
               objeto: opportunity.summary,
               requisitos: opportunity.requirements,
               observacaoRequisitos: opportunity.requirementsAreGeneric
-                ? "Requisitos usuais de habilitação da Lei 14.133/2021, não lidos do edital. Indique em reviewNotes que o edital pode exigir documentos diferentes."
+                ? "Os requisitos do edital ainda não foram extraídos. Não presuma requisitos usuais; indique em reviewNotes que a análise não pode confirmar atendimento às exigências do edital."
                 : "Requisitos extraídos do edital oficial por IA. Use os detalhes (valores, prazos, quantidades) para comparar com o documento.",
               requisitosDetalhados: editalDetails?.requisitos ?? null,
               condicoesEdital: editalDetails?.campos ?? null,

@@ -47,19 +47,6 @@ export type OpportunityRecord = Opportunity & {
   raw: unknown;
 };
 
-/**
- * Requisitos usuais de habilitação da Lei 14.133/2021 (arts. 62 a 70).
- * A API de consulta não traz os requisitos do edital; esta lista orienta a
- * análise e é sinalizada como genérica na interface.
- */
-export const genericBiddingRequirements = [
-  "Habilitação jurídica (ato constitutivo e inscrição no CNPJ)",
-  "Regularidade fiscal, social e trabalhista (certidões negativas ou positivas com efeito de negativa)",
-  "Qualificação econômico-financeira (balanço patrimonial e certidão de falência)",
-  "Qualificação técnica (atestados de capacidade técnica)",
-  "Proposta comercial conforme o edital",
-];
-
 function cleanText(value: string | null | undefined) {
   return (value ?? "").replace(/\s+/g, " ").trim();
 }
@@ -161,7 +148,7 @@ export function mapPncpContratacao(
     uf: region || null,
     summary: summaryParts.join(" "),
     tags: [...new Set(tags)],
-    requirements: genericBiddingRequirements,
+    requirements: [],
     requirementsAreGeneric: true,
     deadline,
     publishedAt,

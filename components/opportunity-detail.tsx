@@ -58,8 +58,7 @@ export function OpportunityDetail({
   const [error, setError] = useState("");
   const router = useRouter();
   const requirements = useMemo(() => {
-    const unique = [...new Set(opportunity.requirements.filter(Boolean))];
-    return unique.length > 0 ? unique : ["Documento complementar"];
+    return [...new Set(opportunity.requirements.filter(Boolean))];
   }, [opportunity.requirements]);
   const opportunityDocuments = useMemo(
     () =>
@@ -85,8 +84,8 @@ export function OpportunityDetail({
       ),
     [edital, opportunity.requirementsAreGeneric],
   );
-  // Requisitos com documentos vinculados que não estão mais na lista (por
-  // exemplo, da lista genérica, antes de ela ser trocada pela do edital).
+  // Requisitos com documentos vinculados que não estão mais na lista após a
+  // leitura do edital.
   const previousRequirements = useMemo(
     () => [
       ...new Set(
@@ -297,17 +296,28 @@ export function OpportunityDetail({
         </div>
         {opportunity.requirementsAreGeneric ? (
           <p className="notice">
-            Esta lista é uma orientação geral e pode não corresponder aos
-            documentos exigidos no edital. Confira a fonte oficial.
+            Os requisitos ainda não foram extraídos do edital. Confira a fonte
+            oficial e tente ler o edital novamente.
           </p>
-        ) : (
+        ) : requirements.length > 0 ? (
           <p className="notice">
             Documentos extraídos do edital pela IA. Confira sempre o edital
             oficial e seus anexos antes de enviar a proposta.
           </p>
+        ) : (
+          <p className="notice">
+            A leitura não identificou documentos expressamente exigidos. Confira
+            o edital oficial e seus anexos antes de enviar a proposta.
+          </p>
         )}
         <div className="requirement-list">
-          {requirements.map((requirement, index) => (
+          {requirements.length === 0 ? (
+            <p>
+              {opportunity.requirementsAreGeneric
+                ? "Nenhum documento será sugerido até que o edital seja lido."
+                : "Não há documentos extraídos para enviar nesta oportunidade."}
+            </p>
+          ) : requirements.map((requirement, index) => (
             <section
               className="panel requirement-panel"
               key={`${index}-${requirement}`}

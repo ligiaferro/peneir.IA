@@ -48,11 +48,17 @@ export function OpportunityCard({
       <p className="opportunity-summary">{opportunity.summary}</p>
       <span className="field-label">
         {opportunity.requirementsAreGeneric
-          ? "Requisitos usuais de habilitação (confira o edital)"
+          ? "Requisitos do edital ainda não extraídos"
           : "Requisitos informados no edital"}
       </span>
       <ul className="requirements">
-        {opportunity.requirements.map((requirement, index) => (
+        {opportunity.requirements.length === 0 ? (
+          <li>
+            {opportunity.requirementsAreGeneric
+              ? "Abra a oportunidade para ler o edital."
+              : "A leitura não identificou documentos exigidos."}
+          </li>
+        ) : opportunity.requirements.map((requirement, index) => (
           <li key={`${index}-${requirement}`}>
             {requirement}
             {linkedRequirements.includes(requirement) ? (

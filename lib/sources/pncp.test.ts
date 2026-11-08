@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   fetchOpenContratacoes,
-  genericBiddingRequirements,
   mapPncpContratacao,
   parsePncpDateTime,
   pncpDateParam,
@@ -64,7 +63,7 @@ describe("mapPncpContratacao", () => {
       deadline: "2026-11-10T02:59:59.000Z",
       publishedAt: "2025-03-13T17:10:37.000Z",
       firstSeenAt: "2026-11-07T10:00:00.000Z",
-      requirements: genericBiddingRequirements,
+      requirements: [],
       requirementsAreGeneric: true,
       sourceUrl: "https://pncp.gov.br/app/editais/08761140000194/2025/40",
     });
