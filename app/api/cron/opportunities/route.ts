@@ -74,7 +74,7 @@ async function releaseClaims(
 }
 
 async function loadAuthUsers(supabase: ServiceClient) {
-  const authUsers = new Map<string, { email: string | null; emailConfirmed: boolean }>();
+  const authUsers = new Map<string, { email: string | null }>();
   const perPage = 1000;
   for (let page = 1; ; page += 1) {
     const { data, error } = await supabase.auth.admin.listUsers({ page, perPage });
@@ -82,7 +82,6 @@ async function loadAuthUsers(supabase: ServiceClient) {
     for (const user of data.users) {
       authUsers.set(user.id, {
         email: user.email ?? null,
-        emailConfirmed: Boolean(user.email_confirmed_at),
       });
     }
     if (data.users.length < perPage) break;
@@ -234,7 +233,7 @@ export async function GET(request: NextRequest) {
       });
       continue;
     }
-    if (!authUser.email || !authUser.emailConfirmed) {
+    if (!authUser.email) {
       skipped += 1;
       continue;
     }

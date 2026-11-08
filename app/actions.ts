@@ -179,9 +179,6 @@ export async function sendAlertNowAction(): Promise<SendAlertState> {
   if (authError || !authData.user) return { error: "Sua sessão expirou. Entre novamente." };
   const user = authData.user;
   if (!user.email) return { error: "Sua conta não tem um e-mail cadastrado." };
-  if (!user.email_confirmed_at) {
-    return { error: "Confirme seu e-mail antes de receber alertas." };
-  }
 
   const elapsed = Date.now() - (lastAlertSentAt.get(user.id) ?? 0);
   if (elapsed < sendAlertCooldownMs) {

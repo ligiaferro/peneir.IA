@@ -2,6 +2,7 @@
 
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { createServiceClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 export type AuthState = { error?: string; notice?: string };
@@ -50,21 +51,41 @@ export async function signUpAction(
     return { error: "Para criar a conta, aceite os Termos de Uso e a Política de Privacidade." };
   }
 
-  const supabase = await createClient();
-  const { data, error } = await supabase.auth.signUp({
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return { error: "A criação de contas não está configurada no servidor." };
+  }
+
+  const { error: createError } = await createServiceClient().auth.admin.createUser({
     email,
     password,
-    options: {
-      data: { full_name: fullName, user_kind: userKind, terms_accepted: "true" },
-      emailRedirectTo: `${await getAppOrigin()}/auth/callback?next=${userKind === "empresa" ? "/empresa" : "/dashboard"}`,
+    email_confirm: true,
+    user_metadata: {
+      full_name: fullName,
+      user_kind: userKind,
+      terms_accepted: "true",
     },
   });
-  if (error) return { error: "Não foi possível criar a conta. Verifique os dados." };
-  if (!data.session) {
+  if (createError) {
+    console.error("Could not create confirmed auth user.", {
+      error: createError.message,
+    });
+    return { error: "Não foi possível criar a conta. Verifique os dados." };
+  }
+
+  const supabase = await createClient();
+  const { error: signInError } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  });
+  if (signInError) {
+    console.error("Could not sign in newly created auth user.", {
+      error: signInError.message,
+    });
     return {
-      notice: "Conta criada. Confirme seu e-mail para acessar a plataforma.",
+      error: "Conta criada, mas não foi possível iniciar a sessão. Entre com seu e-mail e senha.",
     };
   }
+
   redirect(userKind === "empresa" ? "/empresa" : "/dashboard");
 }
 
