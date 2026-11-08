@@ -1,9 +1,11 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import {
+  canReadEditaisAutomatically,
   loadDashboardProfile,
   loadLinkedRequirements,
   loadPriorDocuments,
+  scheduleAutomaticEditalReads,
   scheduleLiveRefresh,
 } from "@/app/dashboard/data";
 import { OpportunityCard } from "@/components/opportunity-card";
@@ -32,8 +34,8 @@ import { createClient } from "@/lib/supabase/server";
 import type { Opportunity } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
-/** Margem para a atualização do PNCP feita em segundo plano (after). */
-export const maxDuration = 120;
+/** Margem para o que roda em segundo plano (after): atualização do PNCP e leitura de editais. */
+export const maxDuration = 300;
 
 function formatAge(timestamp: number) {
   const minutes = Math.max(0, Math.round((Date.now() - timestamp) / 60_000));
@@ -133,6 +135,18 @@ export default async function DashboardPage({
         suggestDocumentsForRequirement(requirement, priorDocuments).length > 0,
     ),
   );
+  // Editais ainda não lidos e compatíveis: a leitura corre no servidor, em
+  // segundo plano e com poucas leituras ao mesmo tempo; os cards só acompanham.
+  const autoReadOpportunities = editalStatusUnavailable || !canReadEditaisAutomatically()
+    ? []
+    : matches.filter(
+        (opportunity) =>
+          !editalStatuses.has(opportunity.id) &&
+          opportunity.matchScore !== undefined &&
+          shouldAutomaticallyReadEdital(opportunity.matchScore),
+      );
+  scheduleAutomaticEditalReads(autoReadOpportunities, maxDuration);
+  const autoReadIds = new Set(autoReadOpportunities.map(({ id }) => id));
   const linkedRequirementsByOpportunity = await loadLinkedRequirements(
     supabase,
     authData.user.id,
@@ -344,11 +358,7 @@ export default async function DashboardPage({
                         compatibleRequirements.has(requirement),
                     )}
                     initialEditalStatus={editalStatuses.get(opportunity.id) ?? null}
-                    autoReadEligible={
-                      !editalStatusUnavailable &&
-                      opportunity.matchScore !== undefined &&
-                      shouldAutomaticallyReadEdital(opportunity.matchScore)
-                    }
+                    autoReadEligible={autoReadIds.has(opportunity.id)}
                   />
                 );
               })}

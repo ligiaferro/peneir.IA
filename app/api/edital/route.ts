@@ -1,6 +1,6 @@
 import { after, NextResponse, type NextRequest } from "next/server";
 import { editalLimits, processOpportunityEdital } from "@/lib/edital";
-import { getOpportunityEdital } from "@/lib/edital-store";
+import { getOpportunityEdital, getOpportunityEditais } from "@/lib/edital-store";
 import { getOpportunityById } from "@/lib/opportunity-store";
 import {
   haveEditalFilesChanged,
@@ -21,10 +21,35 @@ async function authenticate() {
   return error || !data.user ? null : supabase;
 }
 
+/** Máximo de editais por consulta em lote. */
+const maxBatchIds = 50;
+
 /** Situação atual da leitura do edital (usada para acompanhar o processamento). */
 export async function GET(request: NextRequest) {
   const supabase = await authenticate();
   if (!supabase) return NextResponse.json({ error: "Entre para continuar." }, { status: 401 });
+  const idsParam = request.nextUrl.searchParams.get("ids");
+  if (idsParam !== null) {
+    // Consulta em lote (cards do painel): uma requisição para vários editais.
+    const ids = [...new Set(idsParam.split(",").map((id) => id.trim()).filter(Boolean))];
+    if (ids.length === 0 || ids.length > maxBatchIds) {
+      return NextResponse.json({ error: "Lista de oportunidades inválida." }, { status: 400 });
+    }
+    try {
+      const editais = await getOpportunityEditais(supabase, ids);
+      return NextResponse.json({
+        editais: Object.fromEntries(
+          ids.map((id) => {
+            const edital = editais.get(id);
+            return [id, edital ? { status: edital.status, requirements: edital.requirements } : null];
+          }),
+        ),
+      });
+    } catch {
+      return NextResponse.json({ error: "Não foi possível consultar os editais." }, { status: 502 });
+    }
+  }
+
   const opportunityId = request.nextUrl.searchParams.get("id") ?? "";
   if (!opportunityId) return NextResponse.json({ error: "Oportunidade inválida." }, { status: 400 });
 

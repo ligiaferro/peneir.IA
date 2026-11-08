@@ -8,13 +8,9 @@ import {
   isGreatMatchScore,
   similarityToPercentage,
 } from "@/lib/similarity";
+import { watchEdital, type EditalSnapshot } from "@/lib/edital-client";
 import type { EditalStatus } from "@/lib/edital-insights";
 import type { Opportunity } from "@/lib/types";
-
-type EditalStatusResponse = {
-  edital?: { status: EditalStatus; requirements: string[] } | null;
-  error?: string;
-};
 
 export function OpportunityCard({
   opportunity,
@@ -38,70 +34,23 @@ export function OpportunityCard({
 
   useEffect(() => {
     let cancelled = false;
-
-    const updateStatus = (edital: EditalStatusResponse["edital"]) => {
-      if (cancelled || !edital) return;
-      setEditalStatus(edital.status);
-      if (edital.status === "ready") setRequirements(edital.requirements);
+    const apply = (edital: EditalSnapshot | null) => {
+      if (cancelled) return;
+      // null: o acompanhamento desistiu; o botão de leitura manual volta a valer.
+      setEditalStatus(edital ? edital.status : null);
+      if (edital?.status === "ready") setRequirements(edital.requirements);
     };
 
-    const poll = async () => {
-      const deadline = Date.now() + 6 * 60_000;
-      while (!cancelled && Date.now() < deadline) {
-        await new Promise((resolve) => setTimeout(resolve, 4_000));
-        if (cancelled) return;
-        try {
-          const response = await fetch(`/api/edital?id=${encodeURIComponent(opportunity.id)}`, {
-            cache: "no-store",
-          });
-          const body = (await response.json()) as EditalStatusResponse;
-          if (!response.ok) throw new Error(body.error ?? "Não foi possível consultar a leitura.");
-          if (body.edital && body.edital.status !== "processing") {
-            updateStatus(body.edital);
-            return;
-          }
-        } catch (error) {
-          if (!cancelled) {
-            setReadError(error instanceof Error ? error.message : "Falha ao consultar a leitura.");
-            return;
-          }
-        }
-      }
-    };
-
-    const startAutomaticRead = async () => {
+    // A leitura corre no servidor, em segundo plano; o card só acompanha.
+    if (initialEditalStatus === "processing" || (initialEditalStatus === null && autoReadEligible)) {
       setEditalStatus("processing");
       setReadError("");
-      try {
-        const response = await fetch("/api/edital", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ opportunityId: opportunity.id }),
-        });
-        const body = (await response.json()) as EditalStatusResponse;
-        if (!response.ok) throw new Error(body.error ?? "Não foi possível iniciar a leitura.");
-        if (body.edital && body.edital.status !== "processing") {
-          updateStatus(body.edital);
-          return;
-        }
-        await poll();
-      } catch (error) {
-        if (!cancelled) {
-          setEditalStatus(null);
-          setReadError(error instanceof Error ? error.message : "Falha ao iniciar a leitura.");
-        }
-      }
-    };
-
-    if (initialEditalStatus === "processing") {
-      void poll();
-    } else if (initialEditalStatus === null && autoReadEligible) {
-      void startAutomaticRead();
+      const stopWatching = watchEdital(opportunity.id, apply);
+      return () => {
+        cancelled = true;
+        stopWatching();
+      };
     }
-
-    return () => {
-      cancelled = true;
-    };
   }, [autoReadEligible, initialEditalStatus, opportunity.id]);
 
   const requirementsLabel =

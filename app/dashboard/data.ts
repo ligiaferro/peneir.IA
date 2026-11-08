@@ -1,12 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { after } from "next/server";
 import { getConfiguredStates } from "@/lib/config";
+import { readEditaisInBackground } from "@/lib/edital-queue";
 import type { SuggestibleDocument } from "@/lib/document-matching";
 import { getStaleStates, refreshLiveOpportunities } from "@/lib/live-refresh";
 import { fetchAllPages } from "@/lib/paginate";
 import { createServiceClient } from "@/lib/supabase/admin";
 import type { Database } from "@/lib/supabase/database.types";
-import type { OpportunityCategory, UserKind, UserProfile } from "@/lib/types";
+import type { Opportunity, OpportunityCategory, UserKind, UserProfile } from "@/lib/types";
 
 type Client = SupabaseClient<Database>;
 
@@ -119,4 +120,36 @@ export async function loadLinkedRequirements(
     linked.set(link.opportunity_id, requirements);
   }
   return linked;
+}
+
+/**
+ * Lê em segundo plano os editais ainda não lidos das oportunidades da página
+ * (na ordem de relevância). Continua depois da resposta e mesmo que a pessoa
+ * saia; o que não couber em `maxDurationSeconds` fica para a próxima visita.
+ */
+export function canReadEditaisAutomatically() {
+  return Boolean(process.env.OPENAI_API_KEY && process.env.SUPABASE_SERVICE_ROLE_KEY);
+}
+
+export function scheduleAutomaticEditalReads(
+  opportunities: readonly Pick<Opportunity, "id" | "title" | "organization" | "summary">[],
+  maxDurationSeconds: number,
+) {
+  if (opportunities.length === 0) return;
+  if (!canReadEditaisAutomatically()) return;
+  // Folga para a leitura em andamento terminar antes do limite da função.
+  const stopAt = Date.now() + Math.max(0, maxDurationSeconds - 120) * 1000;
+  const targets = opportunities.map(({ id, title, organization, summary }) => ({
+    id,
+    title,
+    organization,
+    summary,
+  }));
+  after(async () => {
+    try {
+      await readEditaisInBackground(createServiceClient(), targets, { stopAt });
+    } catch (error) {
+      console.error("Automatic edital reading could not run.", { error: errorMessage(error) });
+    }
+  });
 }
