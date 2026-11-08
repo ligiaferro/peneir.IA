@@ -1,8 +1,11 @@
 import { Resend } from "resend";
 import { NextResponse, type NextRequest } from "next/server";
+import {
+  isAboveSemanticMatchThreshold,
+  minimumOpportunitySimilarity,
+} from "@/lib/ai";
 import { isCronAuthorized } from "@/lib/cron-auth";
 import { formatDeadline } from "@/lib/format";
-import { getMatchingOpportunities } from "@/lib/opportunities";
 import { listOpenOpportunities } from "@/lib/opportunity-store";
 import { createServiceClient } from "@/lib/supabase/admin";
 import type { Database } from "@/lib/supabase/database.types";
@@ -17,6 +20,8 @@ export const maxDuration = 300;
 const newOpportunityWindowMs = 3 * 24 * 60 * 60 * 1000;
 /** Itens listados no corpo do e-mail; o restante fica no painel. */
 const maxItemsPerEmail = 20;
+/** Mantém a resposta RPC abaixo do limite padrão de linhas do PostgREST. */
+const semanticMatchBatchSize = 40;
 /** Pausa entre envios para respeitar o limite de taxa do Resend. */
 const delayBetweenEmailsMs = 600;
 
@@ -200,12 +205,60 @@ export async function GET(request: NextRequest) {
   }
 
   const newSince = Date.now() - newOpportunityWindowMs;
-  // Itens de demonstração aparecem no painel, mas nunca são enviados por e-mail.
   const newOpportunities = openOpportunities.filter(
     (opportunity) =>
-      opportunity.source !== "demo" &&
       new Date(opportunity.firstSeenAt).getTime() >= newSince,
   );
+  const states = [
+    ...new Set(
+      (process.env.PNCP_UFS ?? "PE")
+        .split(",")
+        .map((state) => state.trim().toUpperCase())
+        .filter((state) => /^[A-Z]{2}$/.test(state)),
+    ),
+  ];
+  let vectorMatches: Array<{
+    user_id: string;
+    opportunity_id: string;
+    similarity: number;
+  }>;
+  try {
+    if (profiles.length === 0) {
+      vectorMatches = [];
+    } else {
+      vectorMatches = [];
+      for (let start = 0; start < profiles.length; start += semanticMatchBatchSize) {
+        const batch = profiles.slice(start, start + semanticMatchBatchSize);
+        const { data, error } = await supabase.rpc(
+          "match_opportunities_for_users",
+          {
+            p_user_ids: batch.map(({ id }) => id),
+            p_regions: states,
+            p_min_similarity: minimumOpportunitySimilarity,
+            p_limit_per_user: maxItemsPerEmail,
+            p_created_since: new Date(newSince).toISOString(),
+          },
+        );
+        if (error) throw error;
+        vectorMatches.push(...data);
+      }
+    }
+  } catch (error) {
+    console.error("Could not semantically match opportunities for email alerts.", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return NextResponse.json(
+      { error: "Não foi possível comparar oportunidades com os perfis." },
+      { status: 502 },
+    );
+  }
+  const matchesByUser = new Map<string, Set<string>>();
+  for (const match of vectorMatches) {
+    if (!isAboveSemanticMatchThreshold(match.similarity)) continue;
+    const ids = matchesByUser.get(match.user_id) ?? new Set<string>();
+    ids.add(match.opportunity_id);
+    matchesByUser.set(match.user_id, ids);
+  }
   const resend = new Resend(process.env.RESEND_API_KEY);
   let sent = 0;
   let skipped = 0;
@@ -213,13 +266,8 @@ export async function GET(request: NextRequest) {
   let emailsSent = 0;
 
   for (const profile of profiles) {
-    const matches = getMatchingOpportunities(
-      {
-        categories: profile.categories,
-        keywords: profile.keywords,
-      },
-      newOpportunities,
-    );
+    const matchedIds = matchesByUser.get(profile.id) ?? new Set<string>();
+    const matches = newOpportunities.filter(({ id }) => matchedIds.has(id));
     if (matches.length === 0) continue;
 
     const authUser = authUsers.get(profile.id);

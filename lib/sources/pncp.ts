@@ -190,6 +190,8 @@ export type FetchOpenContratacoesOptions = {
   retryDelaysMs?: number[];
   /** Instante (epoch ms) a partir do qual não se inicia uma nova página. */
   stopAt?: number;
+  /** Tempo máximo de espera por resposta de uma página. */
+  timeoutMs?: number;
   fetchImpl?: typeof fetch;
   sleep?: (ms: number) => Promise<void>;
   userAgent?: string;
@@ -215,6 +217,7 @@ export async function fetchOpenContratacoes({
   delayMs = 1500,
   retryDelaysMs = [5_000, 15_000, 30_000],
   stopAt = Number.POSITIVE_INFINITY,
+  timeoutMs = 30_000,
   fetchImpl = fetch,
   sleep = defaultSleep,
   userAgent = "peneir.IA/0.1",
@@ -242,6 +245,7 @@ export async function fetchOpenContratacoes({
         sleep,
         retryDelaysMs,
         stopAt,
+        timeoutMs,
         userAgent,
       });
     } catch (error) {
@@ -275,12 +279,14 @@ async function requestPage(
     sleep,
     retryDelaysMs,
     stopAt,
+    timeoutMs,
     userAgent,
   }: {
     fetchImpl: typeof fetch;
     sleep: (ms: number) => Promise<void>;
     retryDelaysMs: number[];
     stopAt: number;
+    timeoutMs: number;
     userAgent: string;
   },
 ): Promise<PncpPage | null> {
@@ -291,7 +297,7 @@ async function requestPage(
       response = await fetchImpl(url, {
         headers: { Accept: "application/json", "User-Agent": userAgent },
         cache: "no-store",
-        signal: AbortSignal.timeout(30_000),
+        signal: AbortSignal.timeout(timeoutMs),
       });
     } catch {
       response = undefined;

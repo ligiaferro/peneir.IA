@@ -331,6 +331,7 @@ h3 {
 
 .field input,
 .field select,
+.field textarea,
 .input {
   width: 100%;
   min-height: 41px;
@@ -345,9 +346,17 @@ h3 {
 
 .field input:focus,
 .field select:focus,
+.field textarea:focus,
 .input:focus {
   border-color: #83b9a2;
   box-shadow: 0 0 0 3px rgba(27, 113, 89, 0.1);
+}
+
+.field textarea {
+  min-height: 84px;
+  padding: 10px 11px;
+  resize: vertical;
+  font: inherit;
 }
 
 .category-options {
@@ -487,12 +496,24 @@ h3 {
   padding: 20px;
 }
 
+.opportunity-card-great-match {
+  border: 1px solid #68a980;
+  box-shadow: 0 8px 24px rgba(27, 113, 89, 0.12);
+}
+
 .card-topline {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 12px;
+}
+
+.card-badges {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .badge {
@@ -504,6 +525,16 @@ h3 {
   color: var(--green-dark);
   font-size: 10px;
   font-weight: 700;
+}
+
+.badge-similarity {
+  background: #eef1ef;
+  color: #435950;
+}
+
+.badge-great-match {
+  background: #d9f3e3;
+  color: #176342;
 }
 
 .card-date {

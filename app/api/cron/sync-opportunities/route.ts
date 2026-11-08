@@ -5,6 +5,7 @@ import {
   pruneOldOpportunities,
   upsertOpportunities,
 } from "@/lib/opportunity-store";
+import { indexPendingOpportunities } from "@/lib/opportunity-indexing";
 import {
   fetchOpenContratacoes,
   mapPncpContratacao,
@@ -39,6 +40,9 @@ type RegionSummary = {
   uf: string;
   fetched: number;
   saved: number;
+  indexed: number;
+  indexingFailed: number;
+  indexingComplete: boolean;
   closed: number;
   pages: number;
   complete: boolean;
@@ -77,6 +81,9 @@ export async function GET(request: NextRequest) {
       uf,
       fetched: 0,
       saved: 0,
+      indexed: 0,
+      indexingFailed: 0,
+      indexingComplete: true,
       closed: 0,
       pages: 0,
       complete: false,
@@ -107,6 +114,15 @@ export async function GET(request: NextRequest) {
         .filter((record): record is OpportunityRecord => record !== null);
 
       summary.saved = await upsertOpportunities(supabase, records, seenAt);
+      const indexing = await indexPendingOpportunities(supabase, {
+        limit: 100,
+      });
+      summary.indexed = indexing.indexed;
+      summary.indexingFailed = indexing.failed;
+      summary.indexingComplete = indexing.selected < 100;
+      if (indexing.failed > 0) {
+        summary.error = `${indexing.failed} oportunidade(s) falharam na vetorização.`;
+      }
       // Só encerra registros ausentes quando a listagem da UF foi lida por completo.
       if (result.complete) {
         summary.closed = await closeMissingOpportunities(
@@ -135,7 +151,9 @@ export async function GET(request: NextRequest) {
   }
 
   const failed = regions.some((region) => region.error);
-  const incomplete = regions.some((region) => !region.complete);
+  const incomplete = regions.some(
+    (region) => !region.complete || !region.indexingComplete,
+  );
   return NextResponse.json(
     {
       status: failed ? "partial_failure" : incomplete ? "incomplete" : "complete",

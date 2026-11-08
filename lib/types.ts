@@ -7,7 +7,7 @@ export const opportunityCategories = [
 
 export type OpportunityCategory = (typeof opportunityCategories)[number];
 export type UserKind = "empresa" | "pessoa";
-export type OpportunitySource = "pncp" | "demo";
+export type OpportunitySource = "pncp";
 
 export type Opportunity = {
   id: string;
@@ -18,6 +18,7 @@ export type Opportunity = {
   location: string;
   summary: string;
   tags: string[];
+  matchScore?: number;
   requirements: string[];
   /** true quando os requisitos são uma lista genérica e não foram lidos do edital. */
   requirementsAreGeneric: boolean;
@@ -35,6 +36,8 @@ export type UserProfile = {
   user_kind: UserKind;
   categories: OpportunityCategory[];
   keywords: string[];
+  products_services: string;
+  embedding_model: string | null;
   email_alerts: boolean;
 };
 

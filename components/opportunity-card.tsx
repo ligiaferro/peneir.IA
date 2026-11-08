@@ -4,6 +4,10 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { formatDate, formatDeadline } from "@/lib/format";
 import { categoryLabels } from "@/lib/opportunities";
+import {
+  isGreatMatchScore,
+  similarityToPercentage,
+} from "@/lib/similarity";
 import type {
   AnalysisResult,
   Opportunity,
@@ -34,6 +38,9 @@ export function OpportunityCard({
     () => analyses.find((analysis) => analysis.document_id === documentId),
     [analyses, documentId],
   );
+  const similarity = opportunity.matchScore ?? 0;
+  const similarityPercentage = similarityToPercentage(similarity);
+  const isGreatMatch = isGreatMatchScore(similarity);
 
   async function analyze() {
     if (!documentId) return;
@@ -69,12 +76,21 @@ export function OpportunityCard({
   }
 
   return (
-    <article className="opportunity-card">
+    <article
+      className={`opportunity-card${isGreatMatch ? " opportunity-card-great-match" : ""}`}
+    >
       <div className="card-topline">
-        <span className="badge">
-          {categoryLabels[opportunity.category]}
-          {opportunity.source === "demo" ? " · demonstração" : " · PNCP"}
-        </span>
+        <div className="card-badges">
+          <span className="badge">
+            {categoryLabels[opportunity.category]} · PNCP
+          </span>
+          <span className="badge badge-similarity">
+            Similaridade {similarityPercentage}%
+          </span>
+          {isGreatMatch && (
+            <span className="badge badge-great-match">Ótima match</span>
+          )}
+        </div>
         <span className="card-date">
           Publicado {formatDate(opportunity.publishedAt)}
         </span>

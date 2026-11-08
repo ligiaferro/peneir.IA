@@ -1,5 +1,5 @@
 -- Oportunidades coletadas de fontes reais (ex.: PNCP).
--- As oportunidades de demonstração continuam no código e não são gravadas aqui.
+-- Oportunidades coletadas de fontes reais são armazenadas nesta tabela.
 create table public.opportunities (
   id text primary key,
   source text not null check (source in ('pncp')),

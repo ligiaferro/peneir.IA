@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { updateProfileAction, type ProfileState } from "@/app/actions";
 import { categoryLabels } from "@/lib/opportunities";
 import type { OpportunityCategory, UserProfile } from "@/lib/types";
@@ -11,6 +11,7 @@ const categories = Object.entries(categoryLabels) as [
 ][];
 
 export function ProfileForm({ profile }: { profile: UserProfile }) {
+  const [userKind, setUserKind] = useState(profile.user_kind);
   const [state, formAction, pending] = useActionState<ProfileState, FormData>(
     updateProfileAction,
     {},
@@ -31,7 +32,12 @@ export function ProfileForm({ profile }: { profile: UserProfile }) {
         </div>
         <div className="field">
           <label htmlFor="user_kind">Meu perfil</label>
-          <select id="user_kind" name="user_kind" defaultValue={profile.user_kind}>
+          <select
+            id="user_kind"
+            name="user_kind"
+            value={userKind}
+            onChange={(event) => setUserKind(event.target.value as UserProfile["user_kind"])}
+          >
             <option value="pessoa">Pessoa</option>
             <option value="empresa">Empresa</option>
           </select>
@@ -55,6 +61,30 @@ export function ProfileForm({ profile }: { profile: UserProfile }) {
             {label}
           </label>
         ))}
+      </div>
+      <div className="field">
+        <label htmlFor="products_services">
+          {userKind === "empresa"
+            ? "Quais produtos ou serviços sua empresa fornece?"
+            : "Produtos, serviços ou áreas de interesse"}
+        </label>
+        <textarea
+          id="products_services"
+          name="products_services"
+          defaultValue={profile.products_services}
+          maxLength={4000}
+          rows={3}
+          placeholder={
+            userKind === "empresa"
+              ? "ex.: fornecimento de refeições prontas, merenda escolar e serviços de alimentação coletiva"
+              : "ex.: pesquisa em saúde pública, cursos de engenharia ambiental"
+          }
+          required={userKind === "empresa"}
+        />
+        <p className="field-hint">
+          Usamos essa descrição para comparar semanticamente sua atividade com
+          o objeto de cada oportunidade.
+        </p>
       </div>
       <div className="field">
         <label htmlFor="keywords">Palavras-chave (separadas por vírgula)</label>

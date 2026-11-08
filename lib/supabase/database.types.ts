@@ -8,7 +8,7 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[];
 
-/** Fontes reais gravadas em `public.opportunities` (as de demonstração ficam no código). */
+/** Fonte real das oportunidades gravadas em `public.opportunities`. */
 type OpportunitySourceTable = "pncp";
 
 export type Database = {
@@ -21,6 +21,10 @@ export type Database = {
           user_kind: UserKind;
           categories: OpportunityCategory[];
           keywords: string[];
+          products_services: string;
+          embedding: string | null;
+          embedding_model: string | null;
+          embedding_updated_at: string | null;
           email_alerts: boolean;
           created_at: string;
           updated_at: string;
@@ -31,6 +35,10 @@ export type Database = {
           user_kind?: UserKind;
           categories?: OpportunityCategory[];
           keywords?: string[];
+          products_services?: string;
+          embedding?: string | null;
+          embedding_model?: string | null;
+          embedding_updated_at?: string | null;
           email_alerts?: boolean;
           created_at?: string;
           updated_at?: string;
@@ -41,6 +49,10 @@ export type Database = {
           user_kind?: UserKind;
           categories?: OpportunityCategory[];
           keywords?: string[];
+          products_services?: string;
+          embedding?: string | null;
+          embedding_model?: string | null;
+          embedding_updated_at?: string | null;
           email_alerts?: boolean;
           created_at?: string;
           updated_at?: string;
@@ -149,6 +161,13 @@ export type Database = {
           published_at: string;
           source_url: string;
           raw: Json | null;
+          commercial_concepts: string[];
+          embedding: string | null;
+          embedding_model: string | null;
+          embedding_input_version: number;
+          index_status: "pending" | "indexed" | "irrelevant" | "failed";
+          index_error: string | null;
+          indexed_at: string | null;
           first_seen_at: string;
           last_seen_at: string;
           closed_at: string | null;
@@ -171,6 +190,13 @@ export type Database = {
           published_at: string;
           source_url: string;
           raw?: Json | null;
+          commercial_concepts?: string[];
+          embedding?: string | null;
+          embedding_model?: string | null;
+          embedding_input_version?: number;
+          index_status?: "pending" | "indexed" | "irrelevant" | "failed";
+          index_error?: string | null;
+          indexed_at?: string | null;
           first_seen_at?: string;
           last_seen_at?: string;
           closed_at?: string | null;
@@ -193,6 +219,13 @@ export type Database = {
           published_at?: string;
           source_url?: string;
           raw?: Json | null;
+          commercial_concepts?: string[];
+          embedding?: string | null;
+          embedding_model?: string | null;
+          embedding_input_version?: number;
+          index_status?: "pending" | "indexed" | "irrelevant" | "failed";
+          index_error?: string | null;
+          indexed_at?: string | null;
           first_seen_at?: string;
           last_seen_at?: string;
           closed_at?: string | null;
@@ -209,6 +242,31 @@ export type Database = {
           p_opportunity_id: string;
         };
         Returns: boolean;
+      };
+      match_user_opportunities: {
+        Args: {
+          p_user_id: string;
+          p_categories: string[];
+          p_regions: string[];
+          p_min_similarity?: number;
+          p_limit?: number;
+          p_offset?: number;
+        };
+        Returns: Array<{ opportunity_id: string; similarity: number }>;
+      };
+      match_opportunities_for_users: {
+        Args: {
+          p_user_ids: string[];
+          p_regions: string[];
+          p_min_similarity?: number;
+          p_limit_per_user?: number;
+          p_created_since?: string | null;
+        };
+        Returns: Array<{
+          user_id: string;
+          opportunity_id: string;
+          similarity: number;
+        }>;
       };
     };
     Enums: Record<string, never>;

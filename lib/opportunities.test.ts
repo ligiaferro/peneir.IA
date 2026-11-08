@@ -1,13 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
-  getDemoOpportunities,
   getMatchingOpportunities,
   getSearchCategories,
   normalizeSearchText,
 } from "./opportunities";
 import type { Opportunity } from "./types";
-
-const now = new Date("2026-11-07T15:00:00.000Z");
 
 const bidding: Opportunity = {
   id: "pncp:00000000000191-1-000001/2026",
@@ -25,16 +22,15 @@ const bidding: Opportunity = {
   firstSeenAt: "2026-11-07T10:00:00.000Z",
   sourceUrl: "https://pncp.gov.br/app/editais/00000000000191/2026/1",
 };
-const opportunities = [bidding, ...getDemoOpportunities(now)];
+const opportunities = [bidding];
 
 describe("getMatchingOpportunities", () => {
-  it("filters by selected categories", () => {
+  it("returns no matches for categories without real opportunities", () => {
     const results = getMatchingOpportunities(
       { categories: ["doutorado"], keywords: [] },
       opportunities,
     );
-    expect(results.length).toBeGreaterThan(0);
-    expect(results.every((item) => item.category === "doutorado")).toBe(true);
+    expect(results).toEqual([]);
   });
 
   it("ignores case and accents in keywords", () => {
@@ -67,20 +63,27 @@ describe("getMatchingOpportunities", () => {
 
   it("searches every category by keyword when no category is selected", () => {
     const results = getMatchingOpportunities(
-      { categories: [], keywords: ["informática", "petrolina"] },
+      { categories: [], keywords: ["informática"] },
       opportunities,
     );
-    expect(results.map((item) => item.id).sort()).toEqual(
-      [bidding.id, "mock-concurso-002"].sort(),
-    );
+    expect(results.map((item) => item.id)).toEqual([bidding.id]);
   });
 
   it("matches keywords against locations", () => {
     const results = getMatchingOpportunities(
-      { categories: ["concursos"], keywords: ["petrolina"] },
+      { categories: ["licitacoes"], keywords: ["recife"] },
       opportunities,
     );
-    expect(results.map((item) => item.id)).toEqual(["mock-concurso-002"]);
+    expect(results.map((item) => item.id)).toEqual([bidding.id]);
+  });
+
+  it("does not return example opportunities when no real records exist", () => {
+    expect(
+      getMatchingOpportunities(
+        { categories: ["concursos", "doutorado", "bolsas"], keywords: [] },
+        [],
+      ),
+    ).toEqual([]);
   });
 });
 
@@ -93,25 +96,6 @@ describe("getSearchCategories", () => {
       "doutorado",
       "bolsas",
     ]);
-  });
-});
-
-describe("getDemoOpportunities", () => {
-  it("keeps demo deadlines in the future relative to the current date", () => {
-    for (const reference of [now, new Date("2027-06-01T12:00:00.000Z")]) {
-      const demo = getDemoOpportunities(reference);
-      expect(demo.length).toBeGreaterThan(0);
-      expect(demo.every((item) => item.source === "demo")).toBe(true);
-      expect(
-        demo.every((item) => new Date(item.deadline) > reference),
-      ).toBe(true);
-    }
-  });
-
-  it("does not include bidding opportunities, which come from PNCP", () => {
-    expect(
-      getDemoOpportunities(now).some((item) => item.category === "licitacoes"),
-    ).toBe(false);
   });
 });
 

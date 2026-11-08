@@ -2,8 +2,19 @@ import { redirect } from "next/navigation";
 import { OpportunityCard } from "@/components/opportunity-card";
 import { ProfileForm } from "@/components/profile-form";
 import { signOutAction } from "@/app/auth/actions";
-import { getMatchingOpportunities, getSearchCategories } from "@/lib/opportunities";
-import { listOpenOpportunities } from "@/lib/opportunity-store";
+import { getSearchCategories } from "@/lib/opportunities";
+import {
+  listMatchingOpportunities,
+  upsertOpportunities,
+} from "@/lib/opportunity-store";
+import { indexPendingOpportunities } from "@/lib/opportunity-indexing";
+import {
+  fetchOpenContratacoes,
+  mapPncpContratacao,
+  pncpDateParam,
+  type OpportunityRecord,
+} from "@/lib/sources/pncp";
+import { createServiceClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type {
   AnalysisResult,
@@ -17,8 +28,6 @@ import { DashboardDocuments } from "./dashboard-documents";
 
 export const dynamic = "force-dynamic";
 
-const maxDisplayedOpportunities = 30;
-
 export default async function DashboardPage() {
   const supabase = await createClient();
   const { data: authData, error: authError } = await supabase.auth.getUser();
@@ -27,7 +36,7 @@ export default async function DashboardPage() {
   const [profileResult, documentsResult, analysesResult] = await Promise.all([
     supabase
       .from("profiles")
-      .select("id, full_name, user_kind, categories, keywords, email_alerts")
+      .select("id, full_name, user_kind, categories, keywords, products_services, embedding_model, email_alerts")
       .eq("id", authData.user.id)
       .maybeSingle(),
     supabase
@@ -61,15 +70,32 @@ export default async function DashboardPage() {
     user_kind: profileResult.data.user_kind as UserKind,
     categories: profileResult.data.categories as OpportunityCategory[],
     keywords: profileResult.data.keywords,
+    products_services: profileResult.data.products_services,
+    embedding_model: profileResult.data.embedding_model,
     email_alerts: profileResult.data.email_alerts,
   };
   const documents = documentsResult.data as UserDocument[];
   const analysisData = analysesResult.data;
+  const hasSearch =
+    profile.categories.length > 0 ||
+    profile.keywords.some((keyword) => keyword.trim().length > 0);
+  const hasDocuments = documents.length > 0;
+  const searchCategories = getSearchCategories(profile);
+  const states = [
+    ...new Set(
+      (process.env.PNCP_UFS ?? "PE")
+        .split(",")
+        .map((state) => state.trim().toUpperCase())
+        .filter((state) => /^[A-Z]{2}$/.test(state)),
+    ),
+  ];
   let openOpportunities: Opportunity[];
   try {
-    openOpportunities = await listOpenOpportunities(
+    openOpportunities = await listMatchingOpportunities(
       supabase,
-      getSearchCategories(profile),
+      profile.id,
+      searchCategories,
+      states,
     );
   } catch (error) {
     const message =
@@ -77,16 +103,117 @@ export default async function DashboardPage() {
         ? String(error.message)
         : "erro desconhecido";
     throw new Error(
-      `Não foi possível carregar as oportunidades: ${message}. Confira se a migração 0002 foi executada.`,
+      `Não foi possível carregar as oportunidades: ${message}. Confira se todas as migrações foram executadas.`,
     );
   }
-  const hasSearch =
-    profile.categories.length > 0 ||
-    profile.keywords.some((keyword) => keyword.trim().length > 0);
-  const hasDocuments = documents.length > 0;
-  const matches = getMatchingOpportunities(profile, openOpportunities);
-  const displayedMatches = matches.slice(0, maxDisplayedOpportunities);
-  const realMatches = matches.filter((item) => item.source !== "demo").length;
+  let pncpRefreshError = false;
+  let pncpWasQueried = false;
+  if (
+    hasSearch &&
+    searchCategories.includes("licitacoes")
+  ) {
+    const stopAt = Date.now() + 6_000;
+    const configuredDaysAhead = Number.parseInt(
+      process.env.PNCP_DAYS_AHEAD ?? "",
+      10,
+    );
+    const daysAhead =
+      Number.isInteger(configuredDaysAhead) && configuredDaysAhead > 0
+        ? Math.min(configuredDaysAhead, 365)
+        : 60;
+    const liveRecords: OpportunityRecord[] = [];
+
+    if (states.length === 0) pncpRefreshError = true;
+    for (let index = 0; index < states.length; index += 1) {
+      const uf = states[index];
+      if (Date.now() + 1_000 >= stopAt) {
+        pncpRefreshError = true;
+        break;
+      }
+      if (index > 0) {
+        await new Promise((resolve) => setTimeout(resolve, 1_500));
+        if (Date.now() + 250 >= stopAt) {
+          pncpRefreshError = true;
+          break;
+        }
+      }
+
+      try {
+        pncpWasQueried = true;
+        const result = await fetchOpenContratacoes({
+          uf,
+          dataFinal: pncpDateParam(daysAhead),
+          maxPages: 1,
+          pageSize: 50,
+          delayMs: 0,
+          retryDelaysMs: [],
+          stopAt,
+          timeoutMs: Math.min(4_000, stopAt - Date.now()),
+          userAgent: `peneir.IA/0.1 (+${process.env.NEXT_PUBLIC_APP_URL ?? "https://peneir.ia"})`,
+        });
+        if (result.error) {
+          pncpRefreshError = true;
+          console.error("PNCP live dashboard query was incomplete.", {
+            uf,
+            error: result.error,
+          });
+        }
+        const fetchedAt = new Date().toISOString();
+        liveRecords.push(
+          ...result.items
+            .map((item) => mapPncpContratacao(item, fetchedAt, uf))
+            .filter((record): record is OpportunityRecord => record !== null),
+        );
+      } catch (error) {
+        pncpRefreshError = true;
+        console.error("PNCP live dashboard query failed.", {
+          uf,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      pncpRefreshError = true;
+      console.error(
+        "Cannot persist and index live PNCP results without SUPABASE_SERVICE_ROLE_KEY.",
+      );
+    } else {
+      try {
+        const adminClient = createServiceClient();
+        if (liveRecords.length > 0) {
+          await upsertOpportunities(adminClient, liveRecords);
+        }
+        const liveIds = [...new Set(liveRecords.map(({ id }) => id))];
+        for (let start = 0; start < liveIds.length; start += 100) {
+          const indexing = await indexPendingOpportunities(adminClient, {
+            ids: liveIds.slice(start, start + 100),
+            limit: 100,
+          });
+          if (indexing.failed > 0) pncpRefreshError = true;
+        }
+        const pendingIndexing = await indexPendingOpportunities(adminClient, {
+          limit: 50,
+        });
+        if (pendingIndexing.failed > 0 || pendingIndexing.selected === 50) {
+          pncpRefreshError = true;
+        }
+        openOpportunities = await listMatchingOpportunities(
+          supabase,
+          profile.id,
+          searchCategories,
+          states,
+        );
+      } catch (error) {
+        pncpRefreshError = true;
+        console.error("Could not index live PNCP opportunities.", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+  }
+  const matches = openOpportunities;
+  const realMatches = matches.length;
 
   return (
     <div className="shell">
@@ -130,6 +257,8 @@ export default async function DashboardPage() {
               href={
                 !hasSearch
                   ? "#perfil"
+                  : !profile.embedding_model
+                    ? "#perfil"
                   : !hasDocuments
                     ? "#documentos"
                     : "#oportunidades"
@@ -137,6 +266,8 @@ export default async function DashboardPage() {
             >
               {!hasSearch
                 ? "Personalizar minha busca ↓"
+                : !profile.embedding_model
+                  ? "Descrever minha atividade ↓"
                 : !hasDocuments
                   ? "Adicionar documentos ↓"
                   : `Ver ${matches.length} oportunidades para mim ↓`}
@@ -174,7 +305,8 @@ export default async function DashboardPage() {
             <section className="panel">
               <h3>O que você está buscando?</h3>
               <p className="panel-description">
-                Selecione áreas e termos para personalizar suas oportunidades.
+                Empresas precisam descrever o que fornecem. Comparamos essa
+                descrição semanticamente com os objetos das licitações.
               </p>
               <ProfileForm profile={profile} />
             </section>
@@ -206,26 +338,42 @@ export default async function DashboardPage() {
               <h2>Oportunidades para você</h2>
               <p>
                 {matches.length}{" "}
-                {matches.length === 1 ? "correspondência" : "correspondências"}{" "}
-                com prazo aberto
-                {matches.length > displayedMatches.length &&
-                  `; mostrando as ${displayedMatches.length} mais recentes. Use palavras-chave no perfil para refinar`}
-                . Licitações vêm do PNCP; concursos, doutorados e bolsas ainda
-                são dados de demonstração.
+                {matches.length === 1 ? "licitação ativa" : "licitações ativas"}{" "}
+                do PNCP, ordenadas por score de similaridade. O percentual
+                representa similaridade semântica, não chance de contratação
+                ou habilitação.
               </p>
             </div>
             <span className="badge">
-              {realMatches} do PNCP · atualizado diariamente
+              {realMatches} do PNCP ·{" "}
+              {pncpRefreshError
+                ? "dados salvos e consulta pendente"
+                : pncpWasQueried
+                  ? "consultado ao carregar"
+                  : "atualizado pelo cron"}
             </span>
           </div>
-          {matches.length === 0 ? (
+          {pncpRefreshError && (
+            <p className="notice">
+              Não foi possível atualizar todos os dados do PNCP agora. As
+              oportunidades já armazenadas continuam disponíveis.
+            </p>
+          )}
+          {!profile.embedding_model ? (
             <div className="empty-state">
-              Nenhuma oportunidade corresponde aos filtros atuais. Atualize as
-              categorias ou palavras-chave do seu perfil.
+              Para encontrar oportunidades compatíveis, descreva os produtos
+              ou serviços da empresa (ou os temas de interesse) e salve o
+              perfil. O sistema não exibirá licitações antes de gerar o vetor
+              de busca.
+            </div>
+          ) : matches.length === 0 ? (
+            <div className="empty-state">
+              Nenhuma licitação ativa e indexada foi encontrada nas categorias
+              e UFs selecionadas. O PNCP é a fonte de licitações conectada.
             </div>
           ) : (
             <div className="opportunity-grid">
-              {displayedMatches.map((opportunity) => {
+              {matches.map((opportunity) => {
                 const opportunityAnalyses = analysisData
                   .filter((analysis) => analysis.opportunity_id === opportunity.id)
                   .map((analysis) => ({
@@ -247,9 +395,9 @@ export default async function DashboardPage() {
         )}
         <footer className="footer">
           Licitações coletadas do Portal Nacional de Contratações Públicas
-          (PNCP); as demais categorias são demonstrativas. Confirme sempre os
-          requisitos e prazos no edital original. A análise automatizada é apenas apoio e não
-          substitui a conferência humana.
+          (PNCP). Confirme sempre os requisitos e prazos no edital original. A
+          análise automatizada é apenas apoio e não substitui a conferência
+          humana.
         </footer>
       </main>
     </div>

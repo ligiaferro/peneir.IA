@@ -1,8 +1,4 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import {
-  getDemoOpportunities,
-  isDemoOpportunityId,
-} from "@/lib/opportunities";
 import type { OpportunityRecord } from "@/lib/sources/pncp";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import type { Opportunity, OpportunityCategory } from "@/lib/types";
@@ -17,6 +13,8 @@ const opportunityColumns =
 const readPageSize = 1000;
 /** Lotes menores evitam requisições grandes demais (o campo `raw` pesa). */
 const writeBatchSize = 200;
+const semanticMatchPageSize = 500;
+const opportunityFetchBatchSize = 200;
 
 type OpportunityRow = {
   id: string;
@@ -59,10 +57,7 @@ function rowToOpportunity(row: OpportunityRow): Opportunity {
   };
 }
 
-/**
- * Oportunidades com prazo aberto nas categorias pedidas: as coletadas de fontes
- * reais e as de demonstração das categorias que ainda não têm fonte real.
- */
+/** Oportunidades reais com prazo aberto nas categorias pedidas. */
 export async function listOpenOpportunities(
   supabase: Client,
   categories: readonly OpportunityCategory[],
@@ -75,6 +70,8 @@ export async function listOpenOpportunities(
     const { data, error } = await supabase
       .from("opportunities")
       .select(opportunityColumns)
+      .eq("index_status", "indexed")
+      .not("embedding", "is", null)
       .is("closed_at", null)
       .gt("deadline", now.toISOString())
       .in("category", [...categories])
@@ -86,27 +83,70 @@ export async function listOpenOpportunities(
     if (data.length < readPageSize) break;
   }
 
-  const demo = getDemoOpportunities(now).filter(
-    (opportunity) =>
-      categories.includes(opportunity.category) &&
-      new Date(opportunity.deadline) > now,
-  );
-  return [...rows.map(rowToOpportunity), ...demo].sort((a, b) =>
+  return rows.map(rowToOpportunity).sort((a, b) =>
     b.publishedAt.localeCompare(a.publishedAt),
   );
+}
+
+export async function listMatchingOpportunities(
+  supabase: Client,
+  userId: string,
+  categories: readonly OpportunityCategory[],
+  regions: readonly string[],
+  minimumSimilarity = -1,
+): Promise<Opportunity[]> {
+  if (categories.length === 0 || regions.length === 0) return [];
+  const similarityById = new Map<string, number>();
+  for (let offset = 0; ; offset += semanticMatchPageSize) {
+    const { data, error } = await supabase.rpc("match_user_opportunities", {
+      p_user_id: userId,
+      p_categories: [...categories],
+      p_regions: [...regions],
+      p_min_similarity: minimumSimilarity,
+      p_limit: semanticMatchPageSize,
+      p_offset: offset,
+    });
+    if (error) throw error;
+    for (const match of data) {
+      similarityById.set(match.opportunity_id, match.similarity);
+    }
+    if (data.length < semanticMatchPageSize) break;
+  }
+  if (similarityById.size === 0) return [];
+
+  const rows: OpportunityRow[] = [];
+  const ids = [...similarityById.keys()];
+  for (let start = 0; start < ids.length; start += opportunityFetchBatchSize) {
+    const { data, error } = await supabase
+      .from("opportunities")
+      .select(opportunityColumns)
+      .eq("index_status", "indexed")
+      .not("embedding", "is", null)
+      .is("closed_at", null)
+      .gt("deadline", new Date().toISOString())
+      .in("id", ids.slice(start, start + opportunityFetchBatchSize));
+    if (error) throw error;
+    rows.push(...(data as OpportunityRow[]));
+  }
+
+  return rows
+    .map((row) => ({
+      ...rowToOpportunity(row),
+      matchScore: similarityById.get(row.id),
+    }))
+    .sort((left, right) => (right.matchScore ?? 0) - (left.matchScore ?? 0));
 }
 
 export async function getOpportunityById(
   supabase: Client,
   id: string,
 ): Promise<Opportunity | null> {
-  if (isDemoOpportunityId(id)) {
-    return getDemoOpportunities().find((item) => item.id === id) ?? null;
-  }
   const { data, error } = await supabase
     .from("opportunities")
     .select(opportunityColumns)
     .eq("id", id)
+    .eq("index_status", "indexed")
+    .not("embedding", "is", null)
     .maybeSingle();
   if (error) throw error;
   return data ? rowToOpportunity(data as OpportunityRow) : null;
