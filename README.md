@@ -1,7 +1,7 @@
 <!-- PROJECT LOGO -->
 <br />
 <p align="center">
-  <a href="#about-the-project">
+  <a href="#sobre-o-projeto">
     <img src="./docs/assets/logo.svg" alt="Logo peneir.IA" width="15%">
   </a>
 
@@ -12,12 +12,6 @@
     <br />
     <a href="#começando"><strong>Explore a documentação »</strong></a>
     <br />
-    <br />
-    <a href="#screenshots">Screenshots</a>
-    ·
-    <a href="#funcionalidades">Funcionalidades</a>
-    ·
-    <a href="#roadmap">Roadmap</a>
   </p>
 </p>
 
@@ -33,22 +27,20 @@
 <details open="open">
   <summary><h2 style="display: inline-block">Índice</h2></summary>
   <ol>
-    <li><a href="#contributors">Equipe</a></li>
+    <li><a href="#equipe">Equipe</a></li>
     <li>
-      <a href="#about-the-project">Sobre o projeto</a>
+      <a href="#sobre-o-projeto">Sobre o projeto</a>
       <ul>
-        <li><a href="#built-with">Tecnologias</a></li>
+        <li><a href="#tecnologias">Tecnologias</a></li>
       </ul>
     </li>
-    <li><a href="#screenshots">Screenshots</a></li>
     <li><a href="#funcionalidades">Funcionalidades</a></li>
     <li><a href="#a-ia-no-produto">A IA no produto</a></li>
     <li><a href="#começando">Começando</a></li>
-    <li><a href="#roadmap">Roadmap</a></li>
   </ol>
 </details>
 
-## [Contributors](https://github.com/ThalesBezerra21)
+## Equipe
 
 <table width="100%" align="center">
   <tr>
@@ -59,7 +51,7 @@
   </tr>
 </table>
 
-## About The Project
+## Sobre o projeto
 
 **peneir.IA** foi desenvolvido para o hackathon **Converge Challenge powered by Tako**. Ele ajuda micro, pequenas e médias empresas a participar de licitações públicas sem passar horas navegando em portais.
 
@@ -73,15 +65,15 @@ As compras públicas brasileiras publicam milhares de editais por dia no [PNCP](
 
 > O peneir.IA é uma ferramenta de apoio. Ele **não** declara habilitação, validade legal nem aprovação. O edital oficial sempre prevalece, e cada card tem link para a publicação original.
 
-### Built With
+### Tecnologias
 
 * [Next.js 15](https://nextjs.org/) e [React 19](https://react.dev/)
 * [TypeScript](https://www.typescriptlang.org/)
-* [Supabase](https://supabase.com/): Auth, Postgres com Row Level Security, Storage privado e [pgvector](https://github.com/pgvector/pgvector)
-* [OpenAI](https://platform.openai.com/docs): embeddings e Chat Completions
+* [Supabase](https://supabase.com/): autenticação, Postgres com segurança em nível de linha (RLS), armazenamento privado de arquivos e [pgvector](https://github.com/pgvector/pgvector)
+* [OpenAI](https://platform.openai.com/docs): embeddings (vetores de texto) e geração de texto por chat
 * [Resend](https://resend.com/) para os alertas por e-mail
 * [PNCP](https://pncp.gov.br/api/consulta/swagger-ui/index.html) e [BrasilAPI](https://brasilapi.com.br/) como fontes de dados
-* [Vercel Cron](https://vercel.com/docs/cron-jobs) para a coleta e os alertas diários
+* [Vercel Cron](https://vercel.com/docs/cron-jobs) (tarefas agendadas) para a coleta e os alertas diários
 * [Vitest](https://vitest.dev/) para testes
 
 ## Funcionalidades
@@ -100,7 +92,7 @@ As compras públicas brasileiras publicam milhares de editais por dia no [PNCP](
 
 | Onde | O que a IA faz |
 |---|---|
-| **Embeddings** | Transforma o perfil e cada licitação em vetores para a busca por similaridade |
+| **Embeddings (vetores)** | Transforma o perfil e cada licitação em vetores para a busca por similaridade |
 | **Onboarding por CNPJ** | Reescreve as atividades (CNAE) da empresa como produtos e serviços fornecidos ao governo e sugere palavras-chave |
 | **Leitura do edital** | Extrai resumo, condições, alertas e a lista de documentos exigidos a partir dos PDFs do PNCP |
 | **Análise de documento** | Compara o texto de um documento com os requisitos do edital, com evidências e avisos de validade |
@@ -109,7 +101,7 @@ As compras públicas brasileiras publicam milhares de editais por dia no [PNCP](
 
 **Pré-requisitos:** Node.js 20.9+, um projeto no [Supabase](https://supabase.com/) e uma chave de API da OpenAI (ou de um provedor compatível com `/embeddings`). A conta no [Resend](https://resend.com/) é opcional e só serve para os e-mails.
 
-1. Instale as dependências e copie o arquivo de exemplo:
+1. Instale as dependências e copie o arquivo de exemplo de variáveis de ambiente:
 
    ```bash
    npm install
