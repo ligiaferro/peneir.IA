@@ -215,10 +215,9 @@ export default async function HomePage({
               Só os <mark>certos</mark> para você.
             </h1>
             <p>
-              A peneir.IA peneira todos os dias as licitações do Portal
-              Nacional de Contratações Públicas, compara cada edital com o que
-              sua empresa oferece e avisa só o que combina com o seu negócio e
-              os seus estados de atuação.
+              Buscamos licitações do Portal Nacional de Contratações Públicas todos os dias,
+              comparando cada edital com o que sua empresa oferece e avisamos só o que combina
+              com o seu negócio.
             </p>
             <div className="lp-cta-row">
               {signedIn ? (
