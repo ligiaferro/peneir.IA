@@ -80,11 +80,11 @@ const icons = {
 const steps = [
   {
     title: "Conte o que você oferece",
-    text: "Descreva em linguagem natural os produtos e serviços da empresa, escolha palavras-chave e marque os estados onde atua.",
+    text: "Descreva os produtos e serviços da empresa, escolha palavras-chave e marque os estados onde atua.",
   },
   {
     title: "A IA peneira os editais",
-    text: "Todo dia coletamos as licitações abertas no PNCP e medimos a similaridade semântica entre cada edital e o seu perfil — não só palavras iguais, mas o sentido.",
+    text: "Todo dia coletamos as licitações abertas no PNCP e medimos a similaridade entre cada edital e o seu perfil.",
   },
   {
     title: "Receba só o que importa",
@@ -140,7 +140,7 @@ const faq = [
   {
     question: "O que significa o percentual em cada oportunidade?",
     answer:
-      "É a similaridade semântica entre o edital e o perfil que você descreveu. Ajuda a priorizar a leitura, mas não representa chance de contratação nem de habilitação — confira sempre o edital.",
+      "É a similaridade semântica entre o edital e o perfil que você descreveu. Ajuda a priorizar a leitura, mas não representa chance de contratação nem de habilitação.",
   },
   {
     question: "Posso acompanhar mais de um estado?",
@@ -216,8 +216,8 @@ export default async function HomePage({
             </h1>
             <p>
               Buscamos licitações do Portal Nacional de Contratações Públicas todos os dias,
-              comparando cada edital com o que sua empresa oferece e avisamos só o que combina
-              com o seu negócio.
+              comparando cada edital com o que sua empresa oferece e avisamos <strong>só o que combina
+              com o seu negócio.</strong>
             </p>
             <div className="lp-cta-row">
               {signedIn ? (
@@ -376,7 +376,7 @@ export default async function HomePage({
               Cada oportunidade mostra o quanto o edital se parece com o perfil
               que você descreveu. Acima de 80%, destacamos como{" "}
               <strong>ótima match</strong>. É uma ferramenta para priorizar a
-              leitura — a decisão de participar continua sendo sua, com o edital
+              leitura: a decisão de participar continua sendo sua, com o edital
               oficial em mãos.
             </p>
           </div>
