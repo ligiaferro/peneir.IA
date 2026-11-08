@@ -2066,3 +2066,116 @@ h3 {
     width: 100%;
   }
 }
+
+/* Relatório de documentos da empresa × exigências do edital */
+.document-report {
+  margin-top: 18px;
+}
+
+.fit-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 9px;
+  border-radius: 20px;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.fit-badge-total {
+  background: #d9f3e3;
+  color: #176342;
+}
+
+.fit-badge-parcial {
+  background: #fff1d6;
+  color: #8a5a12;
+}
+
+.fit-badge-nenhum {
+  background: #eef1ef;
+  color: #536861;
+}
+
+.fit-badge-ai {
+  background: var(--mint);
+  color: var(--green-dark);
+}
+
+.report-documents {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.report-document {
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-left-width: 4px;
+  border-radius: 12px;
+  background: white;
+}
+
+.report-document.fit-total {
+  border-left-color: var(--green);
+}
+
+.report-document.fit-parcial {
+  border-left-color: #e0a63a;
+}
+
+.report-document.fit-nenhum {
+  border-left-color: #c9d3ce;
+}
+
+.report-document-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.report-document-summary,
+.report-document-explanation {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.report-document-summary {
+  color: var(--muted);
+}
+
+.report-matches {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.document-ai-link {
+  margin-top: 6px;
+}
+
+.document-ai-link p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.company-document-upload {
+  margin-bottom: 18px;
+  padding: 16px;
+  border: 1px dashed #acd0bd;
+  border-radius: 14px;
+  background: var(--paper);
+}
+
+.company-document-upload h3 {
+  margin: 0 0 10px;
+  font-size: 15px;
+}

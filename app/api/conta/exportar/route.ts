@@ -12,10 +12,10 @@ export async function GET() {
   }
   const userId = authData.user.id;
 
-  const [profile, documents, links, analyses, deliveries] = await Promise.all([
+  const [profile, documents, links, analyses, deliveries, reports] = await Promise.all([
     supabase
       .from("profiles")
-      .select("full_name, user_kind, cnpj, company_size, categories, keywords, products_services, states, email_alerts, terms_accepted_at, ai_consent_at, created_at, updated_at")
+      .select("full_name, user_kind, cnpj, company_size, categories, keywords, products_services, states, email_alerts, report_emails, terms_accepted_at, ai_consent_at, created_at, updated_at")
       .eq("id", userId)
       .maybeSingle(),
     supabase
@@ -24,7 +24,7 @@ export async function GET() {
       .eq("user_id", userId),
     supabase
       .from("document_opportunities")
-      .select("document_id, opportunity_id, requirement, created_at")
+      .select("document_id, opportunity_id, requirement, added_by, ai_fit, ai_explanation, created_at")
       .eq("user_id", userId),
     supabase
       .from("document_analyses")
@@ -34,8 +34,14 @@ export async function GET() {
       .from("notification_deliveries")
       .select("opportunity_id, status, sent_at")
       .eq("user_id", userId),
+    supabase
+      .from("opportunity_document_reports")
+      .select("opportunity_id, status, result, created_at, updated_at")
+      .eq("user_id", userId),
   ]);
-  const failed = [profile, documents, links, analyses, deliveries].find((result) => result.error);
+  const failed = [profile, documents, links, analyses, deliveries, reports].find(
+    (result) => result.error,
+  );
   if (failed?.error) {
     return NextResponse.json({ error: "Não foi possível reunir seus dados agora." }, { status: 502 });
   }
@@ -47,6 +53,7 @@ export async function GET() {
     documentos: documents.data,
     vinculosComOportunidades: links.data,
     analises: analyses.data,
+    relatoriosDeDocumentos: reports.data,
     alertasEnviados: deliveries.data,
   };
   return new NextResponse(JSON.stringify(body, null, 2), {

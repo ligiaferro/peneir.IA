@@ -3,6 +3,8 @@
  * usado na interface.
  */
 
+import { cleanModelString, parseModelJson } from "@/lib/model-json";
+
 export const editalFieldLabels = {
   criterioJulgamento: "Critério de julgamento",
   modoDisputa: "Modo de disputa",
@@ -89,17 +91,7 @@ const maxRequirementLength = 200;
 const maxTextLength = 600;
 
 function cleanString(value: unknown, maxLength = maxTextLength) {
-  if (typeof value !== "string") return null;
-  const text = value.replace(/\s+/g, " ").trim();
-  return text ? text.slice(0, maxLength) : null;
-}
-
-/** Remove cercas de Markdown que alguns modelos adicionam em volta do JSON. */
-function stripCodeFence(value: string) {
-  return value
-    .trim()
-    .replace(/^```(?:json)?\s*/i, "")
-    .replace(/\s*```$/, "");
+  return cleanModelString(value, maxLength);
 }
 
 /**
@@ -107,11 +99,7 @@ function stripCodeFence(value: string) {
  * repetidos ou vazios são descartados. Lança erro se a estrutura básica faltar.
  */
 export function parseEditalInsights(value: string): EditalInsights {
-  const parsed: unknown = JSON.parse(stripCodeFence(value));
-  if (typeof parsed !== "object" || parsed === null) {
-    throw new Error("A IA devolveu um JSON inválido para o edital.");
-  }
-  const data = parsed as Record<string, unknown>;
+  const data = parseModelJson(value);
   const resumo = cleanString(data.resumo, 1500);
   if (!resumo || !Array.isArray(data.requisitos)) {
     throw new Error("A IA devolveu o edital sem resumo ou sem a lista de requisitos.");

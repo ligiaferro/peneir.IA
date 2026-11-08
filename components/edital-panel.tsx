@@ -84,7 +84,8 @@ export function EditalPanel({
       const response = await fetch("/api/edital", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ opportunityId, force }),
+        // notify: a leitura foi pedida na página da vaga; o relatório vai por e-mail.
+        body: JSON.stringify({ opportunityId, force, notify: true }),
       });
       const body = (await response.json()) as EditalResponse;
       if (!response.ok && response.status !== 202) {

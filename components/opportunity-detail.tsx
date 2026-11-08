@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { setAiConsentAction } from "@/app/actions";
+import { DocumentReportPanel } from "@/components/document-report-panel";
 import { DocumentUploader } from "@/components/document-uploader";
 import { EditalPanel } from "@/components/edital-panel";
 import { suggestDocumentsForRequirement } from "@/lib/document-matching";
+import type { OpportunityDocumentReport } from "@/lib/document-report";
 import {
   editalRequirementCategories,
   type OpportunityEdital,
@@ -34,6 +36,8 @@ export function OpportunityDetail({
   initialDocuments,
   initialAnalyses,
   initialLinks,
+  initialReport,
+  reportIsStale,
   aiConsentGiven,
 }: {
   opportunity: Opportunity;
@@ -41,6 +45,8 @@ export function OpportunityDetail({
   initialDocuments: UserDocument[];
   initialAnalyses: AnalysisRecord[];
   initialLinks: UserDocumentOpportunityLink[];
+  initialReport: OpportunityDocumentReport | null;
+  reportIsStale: boolean;
   aiConsentGiven: boolean;
 }) {
   const [documents, setDocuments] = useState(initialDocuments);
@@ -150,6 +156,19 @@ export function OpportunityDetail({
     );
   }
 
+  /** Vínculos de cada documento a este requisito (origem e encaixe da IA). */
+  function linksFor(requirement: string) {
+    return new Map(
+      links
+        .filter(
+          (link) =>
+            link.opportunity_id === opportunity.id &&
+            link.requirement === requirement,
+        )
+        .map((link) => [link.document_id, link]),
+    );
+  }
+
   function linkedDocuments(requirement: string) {
     return links
       .filter(
@@ -170,17 +189,34 @@ export function OpportunityDetail({
         ? currentDocuments
         : [document, ...currentDocuments],
     );
-    setLinks((currentLinks) =>
-      currentLinks.some(
+    setLinks((currentLinks) => [
+      ...currentLinks.filter(
         (link) =>
-          link.document_id === association.document_id &&
-          link.opportunity_id === association.opportunity_id &&
-          link.requirement === association.requirement,
-      )
-        ? currentLinks
-        : [...currentLinks, association],
-    );
+          !(
+            link.document_id === association.document_id &&
+            link.opportunity_id === association.opportunity_id &&
+            link.requirement === association.requirement
+          ),
+      ),
+      association,
+    ]);
   }
+
+  /** Vínculos desta oportunidade depois do relatório da IA. */
+  const replaceOpportunityLinks = useCallback(
+    (opportunityLinks: UserDocumentOpportunityLink[]) => {
+      setLinks((currentLinks) => [
+        ...currentLinks.filter((link) => link.opportunity_id !== opportunity.id),
+        ...opportunityLinks,
+      ]);
+    },
+    [opportunity.id],
+  );
+  const grantAiConsent = useCallback(() => setAiConsent(true), []);
+  const canGenerateReport =
+    edital?.status === "ready" &&
+    !opportunity.requirementsAreGeneric &&
+    requirements.length > 0;
 
   function removeDocumentAssociation(requirement: string, documentId: string) {
     setDismissedSuggestionIds((currentIds) =>
@@ -283,14 +319,25 @@ export function OpportunityDetail({
         <EditalPanel opportunityId={opportunity.id} initialEdital={edital} />
       )}
 
+      <DocumentReportPanel
+        opportunityId={opportunity.id}
+        canGenerate={canGenerateReport}
+        documentsCount={documents.length}
+        initialReport={initialReport}
+        isStale={reportIsStale}
+        aiConsent={aiConsent}
+        onConsentGranted={grantAiConsent}
+        onLinksChanged={replaceOpportunityLinks}
+      />
+
       <section className="section">
         <div className="section-heading">
           <div>
             <h2>Documentos solicitados</h2>
             <p>
-              Envie um PDF no campo correspondente a cada documento. Os arquivos
-              ficam associados ao requisito e à oportunidade; a reutilização
-              mantém o arquivo privado original, sem criar cópias.
+              Envie um PDF no campo correspondente a cada documento. Todo
+              arquivo enviado fica no arquivo da empresa e pode ser reutilizado
+              (por você ou pela IA) em outras oportunidades, sem criar cópias.
             </p>
           </div>
         </div>
@@ -338,6 +385,7 @@ export function OpportunityDetail({
                 fieldId={`requirement-${index}`}
                 requirement={requirement}
                 documents={linkedDocuments(requirement)}
+                links={linksFor(requirement)}
                 suggestions={suggestionsFor(requirement)}
                 reusableDocuments={reusableDocumentsFor(requirement)}
                 onUploaded={addDocumentAssociation}
@@ -360,6 +408,7 @@ export function OpportunityDetail({
                 fieldId={`previous-${index}`}
                 requirement={requirement}
                 documents={linkedDocuments(requirement)}
+                links={linksFor(requirement)}
                 suggestions={[]}
                 onUploaded={addDocumentAssociation}
                 onLinked={addDocumentAssociation}

@@ -35,7 +35,7 @@ export default async function CompanyPage() {
       .eq("user_id", authData.user.id),
     supabase
       .from("document_opportunities")
-      .select("document_id, opportunity_id, requirement")
+      .select("document_id, opportunity_id, requirement, added_by")
       .eq("user_id", authData.user.id),
   ]);
   if (profileResult.error || !profileResult.data) {
@@ -91,6 +91,11 @@ export default async function CompanyPage() {
     ]),
   );
   const opportunityIdsByDocument = new Map<string, Map<string, Set<string>>>();
+  const aiLinkedPairs = new Set(
+    linksResult.data
+      .filter((link) => link.added_by === "ai")
+      .map((link) => `${link.document_id}\u0000${link.opportunity_id}`),
+  );
   const addOpportunityForDocument = (
     documentId: string,
     opportunityId: string,
@@ -131,7 +136,13 @@ export default async function CompanyPage() {
           .flatMap(([id, requirements]) => {
             const opportunity = opportunities.get(id);
             return opportunity
-              ? [{ ...opportunity, requirements: [...requirements] }]
+              ? [
+                  {
+                    ...opportunity,
+                    requirements: [...requirements],
+                    addedByAi: aiLinkedPairs.has(`${document.id}\u0000${id}`),
+                  },
+                ]
               : [];
           }),
       };
@@ -167,7 +178,10 @@ export default async function CompanyPage() {
             <div>
               <span className="eyebrow">Área da empresa</span>
               <h1 className="company-title">{profile.full_name}</h1>
-              <p>Edite os dados da empresa e acompanhe os documentos enviados por oportunidade.</p>
+              <p>
+                Edite os dados da empresa e mantenha o arquivo de documentos atualizado: a IA
+                compara esses documentos com as exigências de cada edital.
+              </p>
             </div>
           </div>
           <div className="profile-layout">
@@ -179,10 +193,11 @@ export default async function CompanyPage() {
               <ProfileForm profile={profile} />
             </section>
             <section className="panel" id="documentos">
-              <h2>Documentos enviados</h2>
+              <h2>Arquivo de documentos da empresa</h2>
               <p className="panel-description">
-                Consulte, edite os metadados ou remova documentos. Cada item mostra as oportunidades
-                para as quais foi enviado ou analisado.
+                Todos os documentos enviados na plataforma ficam aqui. Ao ler um edital, a IA
+                indica quais deles atendem total ou parcialmente a cada exigência e já os vincula
+                à oportunidade. Edite os metadados ou remova documentos quando precisar.
               </p>
               <CompanyDocuments initialDocuments={companyDocuments} />
             </section>

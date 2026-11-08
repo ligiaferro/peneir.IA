@@ -7,12 +7,15 @@ import type {
   UserDocumentOpportunityLink,
 } from "@/lib/types";
 import type { DocumentSuggestion } from "@/lib/document-matching";
+import { documentFitLabels } from "@/lib/document-report";
 
 type Props = {
   opportunityId: string;
   fieldId: string;
   requirement: string;
   documents: UserDocument[];
+  /** Vínculo de cada documento listado, por id (origem e encaixe da IA). */
+  links?: Map<string, UserDocumentOpportunityLink>;
   suggestions: DocumentSuggestion<UserDocument>[];
   /** Outros documentos válidos do usuário, para escolher manualmente. */
   reusableDocuments?: UserDocument[];
@@ -32,6 +35,7 @@ export function DocumentUploader({
   fieldId,
   requirement,
   documents,
+  links,
   suggestions,
   reusableDocuments = [],
   onUploaded,
@@ -239,6 +243,19 @@ export function DocumentUploader({
                       ).toLocaleDateString("pt-BR")}`
                     : " · validade não informada"}
                 </div>
+                {links?.get(document.id)?.added_by === "ai" && (
+                  <div className="document-ai-link">
+                    <span
+                      className={`fit-badge fit-badge-${links.get(document.id)!.ai_fit ?? "parcial"}`}
+                    >
+                      Adicionado pela IA ·{" "}
+                      {documentFitLabels[links.get(document.id)!.ai_fit ?? "parcial"]}
+                    </span>
+                    {links.get(document.id)!.ai_explanation && (
+                      <p>{links.get(document.id)!.ai_explanation}</p>
+                    )}
+                  </div>
+                )}
               </div>
               <button
                 className="button button-secondary button-small"

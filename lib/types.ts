@@ -55,11 +55,20 @@ export type UserDocument = {
   created_at: string;
 };
 
+/** Quem criou o vínculo entre documento e requisito. */
+export type DocumentLinkSource = "user" | "ai";
+/** Grau de encaixe atribuído pela IA a um vínculo que ela criou. */
+export type DocumentLinkFit = "total" | "parcial";
+
 export type UserDocumentOpportunityLink = {
   user_id: string;
   document_id: string;
   opportunity_id: string;
   requirement: string;
+  /** Ausente em respostas antigas: trate como "user". */
+  added_by?: DocumentLinkSource;
+  ai_fit?: DocumentLinkFit | null;
+  ai_explanation?: string | null;
   created_at: string;
 };
 

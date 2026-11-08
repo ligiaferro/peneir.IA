@@ -34,12 +34,12 @@ export default function PrivacyPage() {
         </li>
         <li>
           <strong>Documentos:</strong> os PDFs que você envia (por exemplo,
-          certidões e contratos sociais), seus metadados (tipo, validade) e os
-          vínculos com oportunidades.
+          certidões e contratos sociais), o texto extraído deles, seus
+          metadados (tipo, validade) e os vínculos com oportunidades.
         </li>
         <li>
-          <strong>Análises:</strong> os resultados das análises por IA que você
-          solicitar.
+          <strong>Análises:</strong> os resultados das análises por IA, como a
+          comparação dos seus documentos com as exigências dos editais.
         </li>
         <li>
           <strong>Registros técnicos:</strong> dados de acesso e de envio de
@@ -58,13 +58,17 @@ export default function PrivacyPage() {
           documentos — <em>execução de contrato</em> (art. 7º, V).
         </li>
         <li>
-          Enviar alertas de oportunidades por e-mail — <em>execução de
-          contrato</em>, com opção de cancelar a qualquer momento.
+          Enviar alertas de oportunidades e o relatório das vagas que você abre
+          (resumo do edital e status dos seus documentos) por e-mail —{" "}
+          <em>execução de contrato</em>, com opção de cancelar a qualquer
+          momento na página Conta.
         </li>
         <li>
           Enviar o texto dos seus documentos a um provedor de inteligência
-          artificial para análise — <em>consentimento</em> (art. 7º, I), pedido
-          antes da primeira análise e revogável na página Conta.
+          artificial para análise, inclusive a comparação automática dos
+          documentos do seu arquivo com as exigências de cada edital lido —{" "}
+          <em>consentimento</em> (art. 7º, I), pedido antes da primeira análise
+          e revogável na página Conta.
         </li>
         <li>
           Segurança, prevenção a abuso e cumprimento de obrigações legais —{" "}

@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { linkColumns } from "@/lib/document-report";
 import { getAcceptedRequirements } from "@/lib/edital-store";
 import { createClient } from "@/lib/supabase/server";
 
@@ -100,7 +101,7 @@ export async function POST(request: NextRequest) {
       },
       { onConflict: "document_id,opportunity_id,requirement" },
     )
-    .select("user_id, document_id, opportunity_id, requirement, created_at")
+    .select(linkColumns)
     .single();
   if (associationError) {
     console.error("Could not link a document to an opportunity.", {

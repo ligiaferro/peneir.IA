@@ -1,4 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { linkColumns } from "@/lib/document-report";
+import { extractDocumentText } from "@/lib/document-report-ai";
 import { getAcceptedRequirements } from "@/lib/edital-store";
 import { createClient } from "@/lib/supabase/server";
 import type {
@@ -7,6 +9,8 @@ import type {
 } from "@/lib/types";
 
 const maxFileSize = 4 * 1024 * 1024;
+const documentColumns =
+  "id, user_id, opportunity_id, name, document_type, expires_at, storage_path, created_at" as const;
 
 function isCalendarDate(value: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
@@ -30,41 +34,45 @@ export async function POST(request: NextRequest) {
   const file = formData.get("file");
   const documentType = String(formData.get("document_type") ?? "").trim();
   const expiresAt = String(formData.get("expires_at") ?? "").trim();
+  // Sem oportunidade, o documento vai só para o arquivo da empresa e pode ser
+  // vinculado depois (pela pessoa ou pela IA) a qualquer oportunidade.
   const opportunityId = String(formData.get("opportunity_id") ?? "").trim();
-  if (!(file instanceof File) || !documentType || !opportunityId) {
+  if (!(file instanceof File) || !documentType) {
     return NextResponse.json(
-      { error: "Selecione uma oportunidade, um PDF e informe o tipo de documento." },
+      { error: "Selecione um PDF e informe o tipo de documento." },
       { status: 400 },
     );
   }
-  const { data: opportunity, error: opportunityError } = await supabase
-    .from("opportunities")
-    .select("id, requirements")
-    .eq("id", opportunityId)
-    .maybeSingle();
-  if (opportunityError) {
-    return NextResponse.json(
-      { error: "Não foi possível validar a oportunidade selecionada." },
-      { status: 502 },
+  if (opportunityId) {
+    const { data: opportunity, error: opportunityError } = await supabase
+      .from("opportunities")
+      .select("id, requirements")
+      .eq("id", opportunityId)
+      .maybeSingle();
+    if (opportunityError) {
+      return NextResponse.json(
+        { error: "Não foi possível validar a oportunidade selecionada." },
+        { status: 502 },
+      );
+    }
+    if (!opportunity) {
+      return NextResponse.json({ error: "Oportunidade não encontrada." }, { status: 404 });
+    }
+    const acceptedRequirements = await getAcceptedRequirements(
+      supabase,
+      opportunity.id,
+      opportunity.requirements,
     );
-  }
-  if (!opportunity) {
-    return NextResponse.json({ error: "Oportunidade não encontrada." }, { status: 404 });
-  }
-  const acceptedRequirements = await getAcceptedRequirements(
-    supabase,
-    opportunity.id,
-    opportunity.requirements,
-  );
-  const validRequirement =
-    acceptedRequirements.includes(documentType) ||
-    (acceptedRequirements.length === 0 &&
-      documentType === "Documento complementar");
-  if (!validRequirement) {
-    return NextResponse.json(
-      { error: "O documento deve corresponder a um requisito desta oportunidade." },
-      { status: 400 },
-    );
+    const validRequirement =
+      acceptedRequirements.includes(documentType) ||
+      (acceptedRequirements.length === 0 &&
+        documentType === "Documento complementar");
+    if (!validRequirement) {
+      return NextResponse.json(
+        { error: "O documento deve corresponder a um requisito desta oportunidade." },
+        { status: 400 },
+      );
+    }
   }
   if (file.type !== "application/pdf" || !file.name.toLowerCase().endsWith(".pdf")) {
     return NextResponse.json({ error: "Envie somente arquivos PDF." }, { status: 400 });
@@ -87,6 +95,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "O arquivo enviado não parece ser um PDF válido." }, { status: 400 });
   }
 
+  // Guardado para a IA comparar o documento com os editais sem baixá-lo de novo.
+  const extractedText = await extractDocumentText(bytes);
+
   const safeName = file.name.replace(/[^\w.-]/g, "_").slice(-120) || "documento.pdf";
   const storagePath = `${authData.user.id}/${crypto.randomUUID()}-${safeName}`;
   const { error: uploadError } = await supabase.storage
@@ -108,15 +119,15 @@ export async function POST(request: NextRequest) {
       .from("documents")
       .insert({
         user_id: authData.user.id,
-        opportunity_id: opportunityId,
+        opportunity_id: opportunityId || null,
         name: safeName,
         document_type: documentType,
         expires_at: expiresAt || null,
         storage_path: storagePath,
+        extracted_text: extractedText,
+        text_extracted_at: new Date().toISOString(),
       })
-      .select(
-        "id, user_id, opportunity_id, name, document_type, expires_at, storage_path, created_at",
-      )
+      .select(documentColumns)
       .single();
     if (error) throw error;
     document = data;
@@ -149,6 +160,10 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  if (!opportunityId) {
+    return NextResponse.json({ document, association: null }, { status: 201 });
+  }
+
   const { data: insertedAssociation, error: associationError } = await supabase
     .from("document_opportunities")
     .insert({
@@ -157,7 +172,7 @@ export async function POST(request: NextRequest) {
       opportunity_id: opportunityId,
       requirement: documentType,
     })
-    .select("user_id, document_id, opportunity_id, requirement, created_at")
+    .select(linkColumns)
     .single();
   if (associationError) {
     console.error("Could not link a newly uploaded document to its requirement.", {
@@ -239,7 +254,7 @@ export async function PATCH(request: NextRequest) {
     .update({ document_type: documentType, expires_at: expiresAt || null })
     .eq("id", body.documentId)
     .eq("user_id", authData.user.id)
-    .select("id, user_id, opportunity_id, name, document_type, expires_at, storage_path, created_at")
+    .select(documentColumns)
     .maybeSingle();
   if (error) {
     return NextResponse.json({ error: "Não foi possível atualizar o documento." }, { status: 502 });

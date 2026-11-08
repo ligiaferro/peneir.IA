@@ -8,6 +8,7 @@ import {
   acceptTermsFormAction,
   setAiConsentFormAction,
   setEmailAlertsFormAction,
+  setReportEmailsFormAction,
 } from "./actions";
 import { DeleteAccountForm } from "./delete-account-form";
 import { BrandMark } from "@/components/brand-mark";
@@ -22,7 +23,7 @@ export default async function AccountPage() {
 
   const { data: profile, error } = await supabase
     .from("profiles")
-    .select("full_name, user_kind, email_alerts, terms_accepted_at, ai_consent_at, created_at")
+    .select("full_name, user_kind, email_alerts, report_emails, terms_accepted_at, ai_consent_at, created_at")
     .eq("id", authData.user.id)
     .maybeSingle();
   if (error || !profile) {
@@ -81,10 +82,25 @@ export default async function AccountPage() {
         </section>
 
         <section className="panel account-panel">
+          <h2>Relatórios das vagas por e-mail</h2>
+          <p className="panel-description">
+            {profile.report_emails
+              ? "Ativos: quando a IA termina o relatório de uma vaga que você abriu, enviamos o resumo do edital e o status dos seus documentos."
+              : "Desativados: os relatórios ficam só na página de cada vaga."}
+          </p>
+          <form action={setReportEmailsFormAction}>
+            <input type="hidden" name="enabled" value={profile.report_emails ? "false" : "true"} />
+            <button className="button button-secondary button-small" type="submit">
+              {profile.report_emails ? "Desativar relatórios por e-mail" : "Ativar relatórios por e-mail"}
+            </button>
+          </form>
+        </section>
+
+        <section className="panel account-panel">
           <h2>Análise de documentos por IA</h2>
           <p className="panel-description">
             {profile.ai_consent_at
-              ? `Autorizada em ${formatDate(profile.ai_consent_at)}. O texto dos documentos que você pedir para analisar é enviado ao provedor de IA.`
+              ? `Autorizada em ${formatDate(profile.ai_consent_at)}. O texto dos documentos do seu arquivo é enviado ao provedor de IA nas análises e na comparação automática com os editais que você abrir.`
               : "Não autorizada. A análise de documentos fica indisponível até você autorizar; a leitura de editais públicos continua funcionando."}
           </p>
           <form action={setAiConsentFormAction}>

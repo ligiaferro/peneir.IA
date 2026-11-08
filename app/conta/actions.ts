@@ -14,6 +14,7 @@ async function requireUser() {
 
 async function updateOwnProfile(values: {
   email_alerts?: boolean;
+  report_emails?: boolean;
   ai_consent_at?: string | null;
   terms_accepted_at?: string;
 }) {
@@ -28,6 +29,10 @@ async function updateOwnProfile(values: {
 
 export async function setEmailAlertsFormAction(formData: FormData) {
   await updateOwnProfile({ email_alerts: formData.get("enabled") === "true" });
+}
+
+export async function setReportEmailsFormAction(formData: FormData) {
+  await updateOwnProfile({ report_emails: formData.get("enabled") === "true" });
 }
 
 export async function setAiConsentFormAction(formData: FormData) {

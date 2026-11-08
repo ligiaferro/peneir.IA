@@ -1,5 +1,4 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { getOpenAIClient } from "@/lib/ai";
 import {
   editalFieldLabels,
   editalRequirementCategories,
@@ -8,6 +7,7 @@ import {
   type EditalInsights,
 } from "@/lib/edital-insights";
 import { selectEditalExcerpt } from "@/lib/edital-text";
+import { createChatModel, createJsonChain } from "@/lib/llm";
 import { extractPdfText, isPdf } from "@/lib/pdf-text";
 import {
   downloadPncpFile,
@@ -151,33 +151,32 @@ Responda somente com um objeto JSON válido, sem Markdown, com:
 - "requisitos": lista somente dos documentos e declarações expressamente exigidos no texto para habilitação ou apresentação da proposta. Não inclua requisitos usuais com base na lei ou em conhecimento externo; não deduza exigências. Cada item: {"documento": nome curto e específico do documento, "categoria": uma de ${Object.keys(editalRequirementCategories).join(", ")}, "detalhe": exigência específica (valores, quantidades, prazos de validade) e o item do edital quando houver, ou null}. Um documento por item, sem repetir. Se o texto não trouxer requisitos, use uma lista vazia.
 - "alertas": até 6 pontos de atenção para quem vai participar (exigências incomuns, prazos curtos, garantias, visita obrigatória, restrições de participação). Lista vazia se não houver.`;
 
+type EditalChainInput = {
+  oportunidade: { titulo: string; orgao: string; objeto: string };
+  textoEdital: string;
+};
+
+/** Chain LangChain da leitura do edital: prompt → modelo → JSON validado. */
+export function createEditalChain() {
+  return createJsonChain<EditalChainInput, EditalInsights>({
+    system: systemPrompt,
+    model: createChatModel({ model: getEditalModel(), timeoutMs: aiTimeoutMs, maxRetries: 0 }),
+    parse: parseEditalInsights,
+  });
+}
+
 export async function extractEditalInsights(
   text: string,
   opportunity: Pick<Opportunity, "title" | "organization" | "summary">,
 ): Promise<EditalInsights> {
-  const response = await getOpenAIClient().chat.completions.create(
-    {
-      model: getEditalModel(),
-      messages: [
-        { role: "system", content: systemPrompt },
-        {
-          role: "user",
-          content: JSON.stringify({
-            oportunidade: {
-              titulo: opportunity.title,
-              orgao: opportunity.organization,
-              objeto: opportunity.summary,
-            },
-            textoEdital: selectEditalExcerpt(text),
-          }),
-        },
-      ],
+  return createEditalChain().invoke({
+    oportunidade: {
+      titulo: opportunity.title,
+      orgao: opportunity.organization,
+      objeto: opportunity.summary,
     },
-    { timeout: aiTimeoutMs, maxRetries: 0 },
-  );
-  const content = response.choices[0]?.message.content;
-  if (!content) throw new Error("A IA não devolveu a leitura do edital.");
-  return parseEditalInsights(content);
+    textoEdital: selectEditalExcerpt(text),
+  });
 }
 
 /**

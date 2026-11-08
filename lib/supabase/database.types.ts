@@ -1,4 +1,10 @@
-import type { AnalysisResult, OpportunityCategory, UserKind } from "@/lib/types";
+import type {
+  AnalysisResult,
+  DocumentLinkFit,
+  DocumentLinkSource,
+  OpportunityCategory,
+  UserKind,
+} from "@/lib/types";
 
 export type Json =
   | string
@@ -28,6 +34,7 @@ export type Database = {
           states: string[];
           terms_accepted_at: string | null;
           ai_consent_at: string | null;
+          report_emails: boolean;
           email_alerts: boolean;
           last_immediate_alert_at: string | null;
           cnpj: string | null;
@@ -49,6 +56,7 @@ export type Database = {
           states?: string[];
           terms_accepted_at?: string | null;
           ai_consent_at?: string | null;
+          report_emails?: boolean;
           email_alerts?: boolean;
           last_immediate_alert_at?: string | null;
           cnpj?: string | null;
@@ -70,6 +78,7 @@ export type Database = {
           states?: string[];
           terms_accepted_at?: string | null;
           ai_consent_at?: string | null;
+          report_emails?: boolean;
           email_alerts?: boolean;
           last_immediate_alert_at?: string | null;
           cnpj?: string | null;
@@ -89,6 +98,8 @@ export type Database = {
           document_type: string;
           expires_at: string | null;
           storage_path: string;
+          extracted_text: string | null;
+          text_extracted_at: string | null;
           created_at: string;
         };
         Insert: {
@@ -99,6 +110,8 @@ export type Database = {
           document_type?: string;
           expires_at?: string | null;
           storage_path: string;
+          extracted_text?: string | null;
+          text_extracted_at?: string | null;
           created_at?: string;
         };
         Update: {
@@ -109,6 +122,8 @@ export type Database = {
           document_type?: string;
           expires_at?: string | null;
           storage_path?: string;
+          extracted_text?: string | null;
+          text_extracted_at?: string | null;
           created_at?: string;
         };
         Relationships: [
@@ -127,6 +142,9 @@ export type Database = {
           document_id: string;
           opportunity_id: string;
           requirement: string;
+          added_by: DocumentLinkSource;
+          ai_fit: DocumentLinkFit | null;
+          ai_explanation: string | null;
           created_at: string;
         };
         Insert: {
@@ -134,6 +152,9 @@ export type Database = {
           document_id: string;
           opportunity_id: string;
           requirement: string;
+          added_by?: DocumentLinkSource;
+          ai_fit?: DocumentLinkFit | null;
+          ai_explanation?: string | null;
           created_at?: string;
         };
         Update: {
@@ -141,6 +162,9 @@ export type Database = {
           document_id?: string;
           opportunity_id?: string;
           requirement?: string;
+          added_by?: DocumentLinkSource;
+          ai_fit?: DocumentLinkFit | null;
+          ai_explanation?: string | null;
           created_at?: string;
         };
         Relationships: [
@@ -186,6 +210,50 @@ export type Database = {
           created_at?: string;
         };
         Relationships: [];
+      };
+      opportunity_document_reports: {
+        Row: {
+          user_id: string;
+          opportunity_id: string;
+          status: "processing" | "ready" | "failed";
+          result: Json | null;
+          signature: string | null;
+          model: string | null;
+          error: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          opportunity_id: string;
+          status?: "processing" | "ready" | "failed";
+          result?: Json | null;
+          signature?: string | null;
+          model?: string | null;
+          error?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          user_id?: string;
+          opportunity_id?: string;
+          status?: "processing" | "ready" | "failed";
+          result?: Json | null;
+          signature?: string | null;
+          model?: string | null;
+          error?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "opportunity_document_reports_opportunity_id_fkey";
+            columns: ["opportunity_id"];
+            isOneToOne: false;
+            referencedRelation: "opportunities";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       opportunity_editais: {
         Row: {
@@ -384,6 +452,10 @@ export type Database = {
       };
       claim_edital_reread: {
         Args: { p_opportunity_id: string };
+        Returns: boolean;
+      };
+      claim_document_report: {
+        Args: { p_opportunity_id: string; p_signature: string; p_force?: boolean };
         Returns: boolean;
       };
       claim_opportunity_notification: {

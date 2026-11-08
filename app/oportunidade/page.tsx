@@ -2,6 +2,11 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { signOutAction } from "@/app/auth/actions";
 import { OpportunityDetail } from "@/components/opportunity-detail";
+import { linkColumns, type OpportunityDocumentReport } from "@/lib/document-report";
+import {
+  computeReportSignature,
+  getOpportunityDocumentReport,
+} from "@/lib/document-report-ai";
 import { getOpportunityEdital, withEditalRequirements } from "@/lib/edital-store";
 import { getOpportunityById } from "@/lib/opportunity-store";
 import { createClient } from "@/lib/supabase/server";
@@ -34,6 +39,7 @@ export default async function OpportunityPage({
     documentsResult,
     analysesResult,
     linksResult,
+    storedReport,
   ] =
     await Promise.all([
       getOpportunityById(supabase, opportunityId),
@@ -56,9 +62,13 @@ export default async function OpportunityPage({
         .eq("opportunity_id", opportunityId),
       supabase
         .from("document_opportunities")
-        .select("user_id, document_id, opportunity_id, requirement, created_at")
+        .select(linkColumns)
         .eq("user_id", authData.user.id)
         .eq("opportunity_id", opportunityId),
+      // Sem a migração 0016, a página segue sem o relatório de documentos.
+      getOpportunityDocumentReport(supabase, authData.user.id, opportunityId).catch(
+        () => null,
+      ),
     ]);
 
   if (!baseOpportunity) notFound();
@@ -82,6 +92,19 @@ export default async function OpportunityPage({
     document_id: analysis.document_id,
     result: analysis.result as AnalysisResult,
   }));
+  const report: OpportunityDocumentReport | null = storedReport && {
+    status: storedReport.status,
+    result: storedReport.result,
+    error: storedReport.error,
+    updatedAt: storedReport.updatedAt,
+  };
+  // O relatório fica desatualizado quando o edital é relido ou os documentos mudam.
+  const reportIsStale = Boolean(
+    storedReport &&
+      storedReport.status !== "processing" &&
+      edital?.status === "ready" &&
+      storedReport.signature !== computeReportSignature(edital, documents),
+  );
 
   return (
     <div className="shell">
@@ -121,6 +144,8 @@ export default async function OpportunityPage({
           initialDocuments={documents}
           initialAnalyses={analyses}
           initialLinks={links}
+          initialReport={report}
+          reportIsStale={reportIsStale}
           aiConsentGiven={Boolean(profileResult.data.ai_consent_at)}
         />
       </main>

@@ -61,8 +61,9 @@ As compras públicas brasileiras publicam milhares de editais por dia no [PNCP](
 - **Perfil por CNPJ:** a empresa informa o CNPJ e o perfil é montado com os dados públicos da Receita Federal. A pessoa confere, edita e salva.
 - **Busca semântica:** o perfil e cada licitação viram vetores, e o painel ordena os editais pela compatibilidade real com o que a empresa vende.
 - **Leitura do edital por IA:** resumo, condições principais e a **lista de documentos exigidos**, extraídos dos arquivos oficiais.
-- **Documentos e análise:** envio por requisito e análise assistida por IA, com evidências e avisos de validade.
-- **Alertas:** um e-mail diário com as oportunidades novas que combinam com o perfil.
+- **Documentos e análise:** um arquivo de documentos da empresa, envio por requisito e análise assistida por IA, com evidências e avisos de validade.
+- **Relatório de documentos por IA:** ao ler o edital, a IA compara todos os documentos do arquivo da empresa com cada exigência, diz se cada um se encaixa total ou parcialmente (ou não), explica o porquê e já vincula os que servem.
+- **Alertas:** um e-mail diário com as oportunidades novas que combinam com o perfil e, ao fim de cada relatório, um e-mail com o resumo da vaga e o status dos documentos.
 
 > O peneir.IA é uma ferramenta de apoio. Ele **não** declara habilitação, validade legal nem aprovação. O edital oficial sempre prevalece, e cada card tem link para a publicação original.
 
@@ -71,7 +72,8 @@ As compras públicas brasileiras publicam milhares de editais por dia no [PNCP](
 * [Next.js 15](https://nextjs.org/) e [React 19](https://react.dev/)
 * [TypeScript](https://www.typescriptlang.org/)
 * [Supabase](https://supabase.com/): autenticação, Postgres com segurança em nível de linha (RLS), armazenamento privado de arquivos e [pgvector](https://github.com/pgvector/pgvector)
-* [OpenAI](https://platform.openai.com/docs): embeddings (vetores de texto) e geração de texto por chat
+* [LangChain](https://js.langchain.com/) (`@langchain/openai`): chains de geração de texto (leitura do edital, análise e relatório de documentos) sobre uma API compatível com OpenAI
+* [OpenAI](https://platform.openai.com/docs): embeddings (vetores de texto)
 * [Resend](https://resend.com/) para os alertas por e-mail
 * [PNCP](https://pncp.gov.br/api/consulta/swagger-ui/index.html) e [BrasilAPI](https://brasilapi.com.br/) como fontes de dados
 * [Vercel Cron](https://vercel.com/docs/cron-jobs) (tarefas agendadas) para a coleta e os alertas diários
@@ -84,9 +86,9 @@ As compras públicas brasileiras publicam milhares de editais por dia no [PNCP](
 | **Cadastro e perfil** | Conta de empresa, **preenchimento do perfil por CNPJ** com edição manual, palavras-chave e **seleção de estados com atalhos** (todos, limpar, inverter e por região) |
 | **Busca** | Similaridade semântica, busca por texto sem diferenciar acentos, filtros de estado e prazo, ordenação por compatibilidade, prazo ou publicação, e selo **Ótima match** acima de 80% |
 | **Leitura do edital** | Leitura automática em segundo plano dos editais compatíveis, com resumo, condições (critério de julgamento, ME/EPP, garantia, visita técnica…), alertas e requisitos com o item do edital. Relê quando o PNCP publica arquivos novos |
-| **Documentos** | Envio de PDF por requisito, sugestão de arquivos já enviados (sem vencidos), edição e remoção na página da empresa |
-| **Análise por IA** | Comparação documento × requisitos, extração e conferência de validade |
-| **Alertas** | E-mail diário, envio imediato para demonstração e descadastro com um clique |
+| **Documentos** | **Arquivo da empresa**: envio de PDFs direto na página da empresa ou por requisito em cada vaga, e todo arquivo enviado fica disponível para todas as vagas. Sugestão de arquivos já enviados (sem vencidos), **vínculo automático pela IA**, edição e remoção |
+| **Análise por IA** | **Relatório de documentos** (cada documento do arquivo × exigências do edital: encaixe total, parcial ou nenhum, com explicação), comparação documento × requisitos, extração e conferência de validade |
+| **Alertas** | E-mail diário, envio imediato para demonstração, **relatório da vaga por e-mail** (resumo do edital e status dos documentos) e descadastro com um clique |
 | **Privacidade (LGPD)** | Consentimento antes de enviar documentos à IA, exportação dos dados em JSON e exclusão da conta |
 
 ## A IA no produto
@@ -97,6 +99,7 @@ As compras públicas brasileiras publicam milhares de editais por dia no [PNCP](
 | **Onboarding por CNPJ** | Reescreve as atividades (CNAE) da empresa como produtos e serviços fornecidos ao governo e sugere palavras-chave |
 | **Leitura do edital** | Extrai resumo, condições, alertas e a lista de documentos exigidos a partir dos PDFs do PNCP |
 | **Análise de documento** | Compara o texto de um documento com os requisitos do edital, com evidências e avisos de validade |
+| **Relatório de documentos** | Lê todos os documentos do arquivo da empresa, indica o encaixe de cada um nas exigências do edital (total, parcial ou nenhum) com a explicação e vincula automaticamente os que servem |
 
 ## Começando
 
@@ -118,7 +121,7 @@ As compras públicas brasileiras publicam milhares de editais por dia no [PNCP](
    | `DATABASE_URL` | URI Postgres do Supabase, usada para aplicar as migrações |
    | `OPENAI_API_KEY` | Busca semântica, leitura de edital e análise |
    | `NEXT_PUBLIC_APP_URL` | URL pública do app (`http://localhost:3000` em desenvolvimento) |
-   | `RESEND_API_KEY`, `RESEND_FROM_EMAIL` | Alertas por e-mail (opcional) |
+   | `RESEND_API_KEY`, `RESEND_FROM_EMAIL` | Alertas e relatórios por e-mail (opcional). O remetente precisa ser de um domínio verificado no Resend; para testar, `onboarding@resend.dev` entrega só para o e-mail dono da conta Resend |
 
    As demais variáveis (modelos, limites e UFs coletadas) têm padrões e estão comentadas no [.env.example](.env.example).
 
