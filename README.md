@@ -37,6 +37,7 @@
     <li><a href="#funcionalidades">Funcionalidades</a></li>
     <li><a href="#a-ia-no-produto">A IA no produto</a></li>
     <li><a href="#começando">Começando</a></li>
+    <li><a href="#screenshots">Screenshots</a></li>
   </ol>
 </details>
 
@@ -130,5 +131,17 @@ As compras públicas brasileiras publicam milhares de editais por dia no [PNCP](
    ```
 
 As migrações (`supabase/migrations`) são aplicadas automaticamente ao iniciar o servidor. Ao criar uma migração nova, reinicie o servidor. Para rodar os testes: `npm test`.
+
+## Screenshots
+
+| Página inicial | Perguntas frequentes |
+|:--------------:|:--------------------:|
+| ![Página inicial](./docs/assets/landing-page.png) | ![Perguntas frequentes e chamada para cadastro](./docs/assets/landing-faq.png) |
+| **Painel: visão geral** | **Painel: oportunidades** |
+| ![Painel com o resumo do perfil e o total de oportunidades](./docs/assets/painel-visao-geral.png) | ![Lista de oportunidades com busca, filtros e similaridade](./docs/assets/painel-oportunidades.png) |
+| **Detalhe da oportunidade** | **Leitura do edital por IA** |
+| ![Página da oportunidade com a leitura do edital em andamento](./docs/assets/oportunidade-detalhe.png) | ![Resumo, condições e pontos de atenção extraídos do edital](./docs/assets/oportunidade-leitura-edital.png) |
+| **Documentos solicitados** | **Área da empresa: perfil por CNPJ** |
+| ![Documentos exigidos pelo edital, com envio de PDF por requisito](./docs/assets/oportunidade-documentos-solicitados.png) | ![Dados da empresa preenchidos a partir do CNPJ e documentos enviados](./docs/assets/empresa-perfil-cnpj.png) |
 
 <p align="right"><a href="#top">voltar ao topo ↑</a></p>
