@@ -43,26 +43,3 @@ export function getDocumentSuggestions(
 
   return [...new Set(suggestions)];
 }
-
-/**
- * Tipos comuns de documentos de habilitação, sugeridos ao enviar documentos ao
- * arquivo da empresa. O campo aceita qualquer outro texto.
- */
-export const companyDocumentTypes = [
-  "Cartão CNPJ (comprovante de inscrição)",
-  "Contrato social ou estatuto e alterações",
-  "Documento de identidade do representante legal",
-  "Procuração",
-  "Certidão conjunta de débitos federais e dívida ativa da União",
-  "Certificado de regularidade do FGTS (CRF)",
-  "Certidão negativa de débitos trabalhistas (CNDT)",
-  "Certidão de regularidade fiscal estadual",
-  "Certidão de regularidade fiscal municipal",
-  "Inscrição estadual ou municipal",
-  "Certidão negativa de falência e recuperação judicial",
-  "Balanço patrimonial e demonstrações contábeis",
-  "Atestado de capacidade técnica",
-  "Registro no conselho profissional (CREA, CAU, CRA etc.)",
-  "Alvará de funcionamento ou licença sanitária",
-  "Declaração ME/EPP",
-];

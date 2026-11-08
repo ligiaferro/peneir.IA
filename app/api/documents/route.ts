@@ -1,6 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { linkColumns } from "@/lib/document-report";
-import { extractDocumentText } from "@/lib/document-report-ai";
+import {
+  extractDocumentText,
+  generateDocumentType,
+} from "@/lib/document-report-ai";
 import { getAcceptedRequirements } from "@/lib/edital-store";
 import { createClient } from "@/lib/supabase/server";
 import type {
@@ -32,14 +35,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Envie um formulário válido." }, { status: 400 });
   }
   const file = formData.get("file");
-  const documentType = String(formData.get("document_type") ?? "").trim();
+  let documentType = String(formData.get("document_type") ?? "").trim();
   const expiresAt = String(formData.get("expires_at") ?? "").trim();
   // Sem oportunidade, o documento vai só para o arquivo da empresa e pode ser
   // vinculado depois (pela pessoa ou pela IA) a qualquer oportunidade.
   const opportunityId = String(formData.get("opportunity_id") ?? "").trim();
-  if (!(file instanceof File) || !documentType) {
+  if (!(file instanceof File) || (opportunityId && !documentType)) {
     return NextResponse.json(
-      { error: "Selecione um PDF e informe o tipo de documento." },
+      {
+        error: opportunityId
+          ? "Selecione um PDF e informe o tipo de documento."
+          : "Selecione ao menos um PDF.",
+      },
       { status: 400 },
     );
   }
@@ -97,6 +104,28 @@ export async function POST(request: NextRequest) {
 
   // Guardado para a IA comparar o documento com os editais sem baixá-lo de novo.
   const extractedText = await extractDocumentText(bytes);
+  let typeWarning: string | undefined;
+  if (!opportunityId && !documentType) {
+    try {
+      documentType = await generateDocumentType(file.name, extractedText);
+      if (documentType === "Documento não identificado") {
+        typeWarning =
+          "A IA não conseguiu identificar o tipo deste documento. Revise em “Editar dados”.";
+      }
+    } catch (error) {
+      console.error("Could not identify the type of an uploaded document.", {
+        userId: authData.user.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      const nameWithoutExtension = file.name.replace(/\.pdf$/i, "").slice(0, 100);
+      documentType = `Revisar tipo — ${nameWithoutExtension || "documento"}`;
+      typeWarning =
+        "A IA não conseguiu identificar o tipo deste documento. Revise em “Editar dados”.";
+    }
+  }
+  if (documentType.length > 500) {
+    return NextResponse.json({ error: "Tipo de documento muito longo." }, { status: 400 });
+  }
 
   const safeName = file.name.replace(/[^\w.-]/g, "_").slice(-120) || "documento.pdf";
   const storagePath = `${authData.user.id}/${crypto.randomUUID()}-${safeName}`;
@@ -161,7 +190,10 @@ export async function POST(request: NextRequest) {
   }
 
   if (!opportunityId) {
-    return NextResponse.json({ document, association: null }, { status: 201 });
+    return NextResponse.json(
+      { document, association: null, ...(typeWarning ? { warning: typeWarning } : {}) },
+      { status: 201 },
+    );
   }
 
   const { data: insertedAssociation, error: associationError } = await supabase

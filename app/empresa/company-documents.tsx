@@ -3,7 +3,6 @@
 import { useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { companyDocumentTypes } from "@/lib/document-suggestions";
 import type { UserDocument } from "@/lib/types";
 
 export type CompanyDocument = UserDocument & {
@@ -36,31 +35,79 @@ export function CompanyDocuments({
 
   async function uploadDocument(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const form = event.currentTarget;
+    const sourceData = new FormData(form);
+    const files = sourceData
+      .getAll("file")
+      .filter((entry): entry is File => entry instanceof File && entry.size > 0);
+    if (files.length === 0) {
+      setUploadError("Selecione ao menos um PDF.");
+      return;
+    }
+    const expiresAtValue = sourceData.get("expires_at");
+
     setUploading(true);
     setUploadError("");
     setUploadNotice("");
+
+    const uploaded: UserDocument[] = [];
+    const uploadErrors: string[] = [];
+    const uploadWarnings: string[] = [];
     try {
-      const response = await fetch("/api/documents", {
-        method: "POST",
-        body: new FormData(event.currentTarget),
-      });
-      const result = (await response.json()) as {
-        document?: UserDocument;
-        error?: string;
-      };
-      if (!response.ok || !result.document) {
-        setUploadError(result.error ?? "Não foi possível enviar o documento.");
-        return;
+      // Envia um arquivo por vez: a API só aceita um PDF por requisição.
+      for (const [index, file] of files.entries()) {
+        if (files.length > 1) {
+          setUploadNotice(`Enviando ${index + 1} de ${files.length}...`);
+        }
+        const fileData = new FormData();
+        fileData.set("file", file);
+        fileData.set("expires_at", expiresAtValue ?? "");
+        try {
+          const response = await fetch("/api/documents", {
+            method: "POST",
+            body: fileData,
+          });
+          const result = (await response.json()) as {
+            document?: UserDocument;
+            warning?: string;
+            error?: string;
+          };
+          if (!response.ok || !result.document) {
+            uploadErrors.push(
+              `${file.name}: ${result.error ?? "não foi possível enviar."}`,
+            );
+            continue;
+          }
+          uploaded.push(result.document);
+          if (result.warning) {
+            uploadWarnings.push(`${file.name}: ${result.warning}`);
+          }
+        } catch {
+          uploadErrors.push(`${file.name}: falha de conexão.`);
+        }
       }
-      const uploaded = result.document;
-      setDocuments((current) => [{ ...uploaded, opportunities: [] }, ...current]);
-      setUploadNotice(
-        "Documento salvo no arquivo da empresa. A IA vai considerá-lo ao analisar os próximos editais.",
-      );
-      uploadFormRef.current?.reset();
-      router.refresh();
-    } catch {
-      setUploadError("Falha de conexão ao enviar o documento. Tente novamente.");
+
+      if (uploaded.length > 0) {
+        setDocuments((current) => [
+          ...uploaded.map((document) => ({ ...document, opportunities: [] })),
+          ...current,
+        ]);
+        uploadFormRef.current?.reset();
+        router.refresh();
+      }
+      if (uploadErrors.length > 0) {
+        setUploadError(uploadErrors.join(" "));
+      }
+      if (uploaded.length > 0) {
+        const summary = `${uploaded.length > 1 ? `${uploaded.length} documentos salvos` : "Documento salvo"} no arquivo da empresa.`;
+        const typeMessage =
+          uploadWarnings.length > 0
+            ? uploadWarnings.join(" ")
+            : "A IA identificou o tipo de cada PDF; você pode revisá-lo em “Editar dados”.";
+        setUploadNotice(
+          `${summary} ${typeMessage}`,
+        );
+      }
     } finally {
       setUploading(false);
     }
@@ -134,39 +181,26 @@ export function CompanyDocuments({
   return (
     <>
       <form ref={uploadFormRef} className="company-document-upload" onSubmit={uploadDocument}>
-        <h3>Adicionar documento ao arquivo</h3>
+        <h3>Adicionar documentos ao arquivo</h3>
         <div className="field">
-          <label htmlFor="company-document-file">PDF (até 4 MB)</label>
+          <label htmlFor="company-document-file">PDF (até 4 MB cada)</label>
           <input
             id="company-document-file"
             className="input"
             name="file"
             type="file"
             accept="application/pdf,.pdf"
+            multiple
             required
           />
+          <p className="field-hint">
+            Selecione vários PDFs. A IA identifica o tipo de cada um, que pode
+            ser revisado depois em “Editar dados”.
+          </p>
         </div>
-        <div className="form-grid">
-          <div className="field">
-            <label htmlFor="company-document-type">Tipo de documento</label>
-            <input
-              id="company-document-type"
-              name="document_type"
-              list="company-document-types"
-              maxLength={500}
-              placeholder="ex.: Certidão negativa de débitos trabalhistas"
-              required
-            />
-            <datalist id="company-document-types">
-              {companyDocumentTypes.map((type) => (
-                <option key={type} value={type} />
-              ))}
-            </datalist>
-          </div>
-          <div className="field">
-            <label htmlFor="company-document-expiry">Validade (se houver)</label>
-            <input id="company-document-expiry" name="expires_at" type="date" />
-          </div>
+        <div className="field">
+          <label htmlFor="company-document-expiry">Validade (se houver)</label>
+          <input id="company-document-expiry" name="expires_at" type="date" />
         </div>
         <button className="button button-small" type="submit" disabled={uploading}>
           {uploading ? "Enviando..." : "Adicionar ao arquivo"}
