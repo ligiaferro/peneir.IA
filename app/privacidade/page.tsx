@@ -24,7 +24,10 @@ export default function PrivacyPage() {
           perfil.
         </li>
         <li>
-          <strong>Perfil de busca:</strong> descrição de produtos e serviços,
+          <strong>Perfil de busca:</strong> CNPJ e porte (opcionais; ao consultar o
+          CNPJ, enviamos só o número à BrasilAPI e, se a IA estiver ativa,
+          as atividades econômicas públicas da empresa ao provedor de IA),
+          descrição de produtos e serviços,
           palavras-chave, categorias, estados de atuação e preferência de
           alertas. A partir desse texto geramos uma representação numérica
           (vetor) usada para encontrar oportunidades compatíveis.

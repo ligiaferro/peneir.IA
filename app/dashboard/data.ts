@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { after } from "next/server";
+import { parseCompanySize } from "@/lib/company-lookup";
 import { getConfiguredStates } from "@/lib/config";
 import { readEditaisInBackground } from "@/lib/edital-queue";
 import type { SuggestibleDocument } from "@/lib/document-matching";
@@ -23,7 +24,7 @@ export async function loadDashboardProfile(supabase: Client, userId: string): Pr
   const { data, error } = await supabase
     .from("profiles")
     .select(
-      "id, full_name, user_kind, categories, keywords, products_services, embedding_model, states, email_alerts",
+      "id, full_name, user_kind, cnpj, company_size, categories, keywords, products_services, embedding_model, states, email_alerts",
     )
     .eq("id", userId)
     .maybeSingle();
@@ -37,6 +38,8 @@ export async function loadDashboardProfile(supabase: Client, userId: string): Pr
     id: data.id,
     full_name: data.full_name,
     user_kind: data.user_kind as UserKind,
+    cnpj: data.cnpj,
+    company_size: parseCompanySize(data.company_size),
     categories: data.categories.filter(isOpportunityCategory),
     keywords: data.keywords,
     products_services: data.products_services,

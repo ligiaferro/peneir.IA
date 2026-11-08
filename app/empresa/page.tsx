@@ -5,6 +5,7 @@ import { ProfileForm } from "@/components/profile-form";
 import type { CompanyDocument } from "./company-documents";
 import { CompanyDocuments } from "./company-documents";
 import { createClient } from "@/lib/supabase/server";
+import { parseCompanySize } from "@/lib/company-lookup";
 import { isOpportunityCategory } from "@/lib/opportunities";
 import type { UserKind, UserProfile } from "@/lib/types";
 
@@ -19,7 +20,7 @@ export default async function CompanyPage() {
     await Promise.all([
     supabase
       .from("profiles")
-      .select("id, full_name, user_kind, categories, keywords, products_services, embedding_model, states, email_alerts")
+      .select("id, full_name, user_kind, cnpj, company_size, categories, keywords, products_services, embedding_model, states, email_alerts")
       .eq("id", authData.user.id)
       .maybeSingle(),
     supabase
@@ -54,6 +55,8 @@ export default async function CompanyPage() {
     id: profileResult.data.id,
     full_name: profileResult.data.full_name,
     user_kind: profileResult.data.user_kind as UserKind,
+    cnpj: profileResult.data.cnpj,
+    company_size: parseCompanySize(profileResult.data.company_size),
     categories: profileResult.data.categories.filter(isOpportunityCategory),
     keywords: profileResult.data.keywords,
     products_services: profileResult.data.products_services,

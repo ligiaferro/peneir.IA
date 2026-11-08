@@ -14,7 +14,17 @@ import {
   alertEmailSubject,
   maxItemsPerEmail,
 } from "@/lib/alert-email";
-import { immediateAlertCooldownSeconds } from "@/lib/config";
+import { formatCnpj, isValidCnpj, normalizeCnpj } from "@/lib/cnpj";
+import {
+  buildProfileDraft,
+  CompanyLookupError,
+  fetchCompanyByCnpj,
+  parseCompanySize,
+  refineProfileDraft,
+  type CompanySize,
+  type ProfileDraft,
+} from "@/lib/company-lookup";
+import { cnpjLookupCooldownSeconds, immediateAlertCooldownSeconds } from "@/lib/config";
 import { buildProfileEmbeddingText } from "@/lib/opportunity-indexing";
 import { listMatchingOpportunities } from "@/lib/opportunity-store";
 import {
@@ -28,6 +38,70 @@ import { brazilianStateCodes, normalizeStates } from "@/lib/states";
 import type { OpportunityCategory } from "@/lib/types";
 
 export type ProfileState = { error?: string; notice?: string };
+
+export type CnpjLookupState = {
+  error?: string;
+  company?: {
+    cnpj: string;
+    cnpjFormatted: string;
+    legalName: string;
+    city: string | null;
+    uf: string | null;
+    active: boolean;
+    size: CompanySize | null;
+    mainActivity: string | null;
+  };
+  draft?: ProfileDraft;
+  /** true quando o texto foi refinado por IA (e não só montado dos CNAEs). */
+  refinedByAi?: boolean;
+};
+
+/**
+ * Consulta o CNPJ na base pública e monta um rascunho de perfil (nome, o que
+ * a empresa fornece, palavras-chave e estado). Não grava nada: a pessoa
+ * confere, edita e salva o formulário.
+ */
+export async function lookupCnpjAction(cnpjInput: string): Promise<CnpjLookupState> {
+  const supabase = await createClient();
+  const { data: authData } = await supabase.auth.getUser();
+  if (!authData.user) return { error: "Sua sessão expirou. Entre novamente." };
+
+  // Limite simples por usuário: a consulta chama uma API pública e a IA.
+  const { data: wait, error: claimError } = await supabase.rpc("claim_cnpj_lookup", {
+    p_cooldown_seconds: cnpjLookupCooldownSeconds,
+  });
+  if (claimError) {
+    console.error("Could not reserve the CNPJ lookup slot.", { error: claimError.message });
+  } else if (wait > 0) {
+    return { error: `Aguarde ${wait} s para consultar de novo.` };
+  }
+
+  try {
+    const company = await fetchCompanyByCnpj(cnpjInput);
+    const base = buildProfileDraft(company);
+    const draft = await refineProfileDraft(company, base);
+    return {
+      company: {
+        cnpj: company.cnpj,
+        cnpjFormatted: formatCnpj(company.cnpj),
+        legalName: company.legalName,
+        city: company.city,
+        uf: company.uf,
+        active: company.active,
+        size: company.size,
+        mainActivity: company.mainActivity?.description ?? null,
+      },
+      draft,
+      refinedByAi: draft !== base,
+    };
+  } catch (error) {
+    if (error instanceof CompanyLookupError) return { error: error.message };
+    console.error("CNPJ lookup failed.", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return { error: "Não foi possível consultar o CNPJ agora. Preencha o perfil manualmente." };
+  }
+}
 
 export async function updateProfileAction(
   _previousState: ProfileState,
@@ -47,9 +121,15 @@ export async function updateProfileAction(
     .slice(0, 20);
   const { states } = normalizeStates(formData.getAll("states").map(String));
   const emailAlerts = formData.get("email_alerts") === "on";
+  const cnpjInput = String(formData.get("cnpj") ?? "").trim();
+  const cnpj = cnpjInput ? normalizeCnpj(cnpjInput) : null;
+  const companySize = parseCompanySize(String(formData.get("company_size") ?? ""));
 
   if (!fullName) {
     return { error: "Informe um nome ou razão social." };
+  }
+  if (cnpjInput && (!cnpj || !isValidCnpj(cnpj))) {
+    return { error: "CNPJ inválido. Confira os 14 dígitos ou deixe o campo em branco." };
   }
   if (productsServices.length > 4000) {
     return { error: "A descrição pode ter no máximo 4.000 caracteres." };
@@ -132,6 +212,8 @@ export async function updateProfileAction(
       categories,
       keywords,
       products_services: productsServices,
+      cnpj,
+      company_size: cnpj ? companySize : null,
       ...embeddingUpdate,
       states,
       email_alerts: emailAlerts,

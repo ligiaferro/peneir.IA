@@ -31,6 +31,10 @@ export type UserProfile = {
   id: string;
   full_name: string;
   user_kind: UserKind;
+  /** 14 dígitos; null se não informado. */
+  cnpj: string | null;
+  /** Porte da empresa (ME, EPP ou DEMAIS); null se não informado. */
+  company_size: "ME" | "EPP" | "DEMAIS" | null;
   categories: OpportunityCategory[];
   keywords: string[];
   products_services: string;

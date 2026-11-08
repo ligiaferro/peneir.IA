@@ -30,6 +30,9 @@ export type Database = {
           ai_consent_at: string | null;
           email_alerts: boolean;
           last_immediate_alert_at: string | null;
+          cnpj: string | null;
+          last_cnpj_lookup_at: string | null;
+          company_size: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -48,6 +51,9 @@ export type Database = {
           ai_consent_at?: string | null;
           email_alerts?: boolean;
           last_immediate_alert_at?: string | null;
+          cnpj?: string | null;
+          last_cnpj_lookup_at?: string | null;
+          company_size?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -66,6 +72,9 @@ export type Database = {
           ai_consent_at?: string | null;
           email_alerts?: boolean;
           last_immediate_alert_at?: string | null;
+          cnpj?: string | null;
+          last_cnpj_lookup_at?: string | null;
+          company_size?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -340,6 +349,10 @@ export type Database = {
     };
     Views: Record<string, never>;
     Functions: {
+      claim_cnpj_lookup: {
+        Args: { p_cooldown_seconds?: number };
+        Returns: number;
+      };
       claim_immediate_alert: {
         Args: { p_cooldown_seconds?: number };
         Returns: number;

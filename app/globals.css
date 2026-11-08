@@ -388,6 +388,35 @@ h3 {
   accent-color: var(--green);
 }
 
+.cnpj-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.cnpj-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.cnpj-card {
+  display: grid;
+  gap: 4px;
+  margin-top: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--green);
+  border-radius: 12px;
+  background: #f3faf7;
+  font-size: 13px;
+}
+
+.cnpj-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
 .state-picker {
   margin: 0 0 16px;
   padding: 0;

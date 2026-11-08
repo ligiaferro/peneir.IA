@@ -52,5 +52,8 @@ export function getConfiguredStates(): { states: BrazilianState[]; invalid: stri
   return normalizeStates((process.env.PNCP_UFS ?? "").split(","));
 }
 
+/** Intervalo mínimo entre duas consultas de CNPJ do mesmo usuário. */
+export const cnpjLookupCooldownSeconds = 5;
+
 /** Intervalo mínimo entre dois envios imediatos de alerta (painel). */
 export const immediateAlertCooldownSeconds = 60;
