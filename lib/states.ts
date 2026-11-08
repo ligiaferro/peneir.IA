@@ -31,6 +31,23 @@ export const brazilianStates = {
 
 export type BrazilianState = keyof typeof brazilianStates;
 
+/** Regiões do IBGE, para marcar vários estados de uma vez. */
+export const brazilianRegions = [
+  { id: "norte", name: "Norte", states: ["AC", "AM", "AP", "PA", "RO", "RR", "TO"] },
+  {
+    id: "nordeste",
+    name: "Nordeste",
+    states: ["AL", "BA", "CE", "MA", "PB", "PE", "PI", "RN", "SE"],
+  },
+  { id: "centro-oeste", name: "Centro-Oeste", states: ["DF", "GO", "MS", "MT"] },
+  { id: "sudeste", name: "Sudeste", states: ["ES", "MG", "RJ", "SP"] },
+  { id: "sul", name: "Sul", states: ["PR", "RS", "SC"] },
+] as const satisfies ReadonlyArray<{
+  id: string;
+  name: string;
+  states: readonly BrazilianState[];
+}>;
+
 export const brazilianStateCodes = Object.keys(brazilianStates) as BrazilianState[];
 
 export function isBrazilianState(value: string): value is BrazilianState {

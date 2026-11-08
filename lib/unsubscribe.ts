@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { getAppUrl } from "@/lib/config";
 
 /**
  * Links de descadastro dos e-mails de alerta. O token é um HMAC do id do
@@ -27,7 +28,7 @@ export function verifyUnsubscribeToken(userId: string, token: string, secret = g
  * app ou o segredo.
  */
 export function buildUnsubscribeUrls(userId: string) {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/$/, "");
+  const appUrl = getAppUrl();
   if (!appUrl || !getSecret()) return null;
   const query = new URLSearchParams({ u: userId, t: createUnsubscribeToken(userId) });
   return {

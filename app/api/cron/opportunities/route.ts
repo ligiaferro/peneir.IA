@@ -10,6 +10,7 @@ import {
   alertEmailSubject,
   maxItemsPerEmail,
 } from "@/lib/alert-email";
+import { fetchAllPages } from "@/lib/paginate";
 import { listOpenOpportunities } from "@/lib/opportunity-store";
 import { refreshStaleProfileEmbeddings } from "@/lib/profile-embedding";
 import { buildUnsubscribeUrls, unsubscribeHeaders } from "@/lib/unsubscribe";
@@ -37,8 +38,6 @@ type DeliveryUpdate = Database["public"]["Tables"]["notification_deliveries"]["U
 
 /** Lotes de ids por requisição, para a URL do filtro `in` não ficar longa demais. */
 const deliveryBatchSize = 100;
-/** O PostgREST limita cada resposta (padrão: 1000 linhas). */
-const readPageSize = 1000;
 
 async function updateDeliveries(
   supabase: ServiceClient,
@@ -90,22 +89,14 @@ async function loadAuthUsers(supabase: ServiceClient) {
 }
 
 async function loadAlertProfiles(supabase: ServiceClient) {
-  const profiles: Pick<
-    Database["public"]["Tables"]["profiles"]["Row"],
-    "id" | "full_name" | "categories" | "keywords" | "states" | "products_services" | "embedding_model"
-  >[] = [];
-  for (let from = 0; ; from += readPageSize) {
-    const { data, error } = await supabase
+  return fetchAllPages((from, to) =>
+    supabase
       .from("profiles")
       .select("id, full_name, categories, keywords, states, products_services, embedding_model")
       .eq("email_alerts", true)
       .order("id")
-      .range(from, from + readPageSize - 1);
-    if (error) throw error;
-    profiles.push(...data);
-    if (data.length < readPageSize) break;
-  }
-  return profiles;
+      .range(from, to),
+  );
 }
 
 export async function GET(request: NextRequest) {

@@ -17,17 +17,11 @@ import {
   type PncpFile,
 } from "@/lib/sources/pncp-files";
 import type { Database } from "@/lib/supabase/database.types";
+import { getEditalModel, getUserAgent } from "@/lib/config";
 import type { Opportunity } from "@/lib/types";
 import { isZip, listZipEntries, readZipEntry } from "@/lib/zip";
 
 type Client = SupabaseClient<Database>;
-
-/** Modelo da leitura de editais; pode ser um mais rápido que o da análise. */
-export function getEditalModel() {
-  return (
-    process.env.OPENAI_EDITAL_MODEL?.trim() || process.env.OPENAI_MODEL?.trim() || "gpt-4o-mini"
-  );
-}
 
 /** Abaixo do maxDuration da rota (300 s), para a falha ser registrada. */
 const aiTimeoutMs = 200_000;
@@ -195,7 +189,7 @@ export async function processOpportunityEdital(
   supabase: Client,
   opportunity: Pick<Opportunity, "id" | "title" | "organization" | "summary">,
 ) {
-  const userAgent = `peneir.IA/0.1 (+${process.env.NEXT_PUBLIC_APP_URL ?? "https://peneir.ia"})`;
+  const userAgent = getUserAgent();
   const startedAt = Date.now();
   let stage = "preparando a leitura";
   const save = async (values: Database["public"]["Tables"]["opportunity_editais"]["Update"]) => {

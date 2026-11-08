@@ -1,3 +1,4 @@
+import { fetchAllPages } from "@/lib/paginate";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { OpportunityRecord } from "@/lib/sources/pncp";
 import type { Database, Json } from "@/lib/supabase/database.types";
@@ -70,9 +71,7 @@ export async function listOpenOpportunities(
 ): Promise<Opportunity[]> {
   if (categories.length === 0) return [];
   const now = new Date();
-  const rows: OpportunityRow[] = [];
-
-  for (let from = 0; ; from += readPageSize) {
+  const rows = (await fetchAllPages((from, to) => {
     let query = supabase
       .from("opportunities")
       .select(opportunityColumns)
@@ -83,14 +82,11 @@ export async function listOpenOpportunities(
       .in("category", [...categories]);
     // A coleta sempre grava a UF consultada em `region`.
     if (states.length > 0) query = query.in("region", [...states]);
-    const { data, error } = await query
+    return query
       .order("published_at", { ascending: false })
       .order("id")
-      .range(from, from + readPageSize - 1);
-    if (error) throw error;
-    rows.push(...(data as OpportunityRow[]));
-    if (data.length < readPageSize) break;
-  }
+      .range(from, to);
+  }, readPageSize)) as OpportunityRow[];
 
   return rows.map(rowToOpportunity).sort((a, b) =>
     b.publishedAt.localeCompare(a.publishedAt),

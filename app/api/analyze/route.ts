@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import { NextResponse, type NextRequest } from "next/server";
+import { getChatModel } from "@/lib/config";
 import { getOpportunityEdital, withEditalRequirements } from "@/lib/edital-store";
 import { getExpiryWarnings } from "@/lib/expiry";
 import { getOpportunityById } from "@/lib/opportunity-store";
@@ -155,8 +156,9 @@ export async function POST(request: NextRequest) {
 
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
+    console.error("Document analysis is unavailable: OPENAI_API_KEY is not configured.");
     return NextResponse.json(
-      { error: "A análise por IA não está configurada. Defina OPENAI_API_KEY." },
+      { error: "A análise por IA não está disponível no momento." },
       { status: 503 },
     );
   }
@@ -194,7 +196,7 @@ export async function POST(request: NextRequest) {
       ...(baseURL ? { baseURL } : {}),
     });
     const response = await client.chat.completions.create({
-      model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+      model: getChatModel(),
       messages: [
         {
           role: "system",

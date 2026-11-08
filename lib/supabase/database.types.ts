@@ -29,6 +29,7 @@ export type Database = {
           terms_accepted_at: string | null;
           ai_consent_at: string | null;
           email_alerts: boolean;
+          last_immediate_alert_at: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -46,6 +47,7 @@ export type Database = {
           terms_accepted_at?: string | null;
           ai_consent_at?: string | null;
           email_alerts?: boolean;
+          last_immediate_alert_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -63,6 +65,7 @@ export type Database = {
           terms_accepted_at?: string | null;
           ai_consent_at?: string | null;
           email_alerts?: boolean;
+          last_immediate_alert_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -337,6 +340,14 @@ export type Database = {
     };
     Views: Record<string, never>;
     Functions: {
+      claim_immediate_alert: {
+        Args: { p_cooldown_seconds?: number };
+        Returns: number;
+      };
+      release_immediate_alert: {
+        Args: Record<string, never>;
+        Returns: undefined;
+      };
       claim_edital_processing: {
         Args: { p_opportunity_id: string; p_force?: boolean };
         Returns: boolean;

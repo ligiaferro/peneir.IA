@@ -1,16 +1,18 @@
 import { redirect } from "next/navigation";
-import { after } from "next/server";
 import Link from "next/link";
+import {
+  loadDashboardProfile,
+  loadLinkedRequirements,
+  loadPriorDocuments,
+  scheduleLiveRefresh,
+} from "@/app/dashboard/data";
 import { OpportunityCard } from "@/components/opportunity-card";
 import { ProfileForm } from "@/components/profile-form";
 import { DashboardFiltersForm } from "@/components/dashboard-filters-form";
 import { SendAlertButton } from "@/components/send-alert-button";
 import { signOutAction } from "@/app/auth/actions";
 import { getSearchCategories } from "@/lib/opportunities";
-import {
-  suggestDocumentsForRequirement,
-  type SuggestibleDocument,
-} from "@/lib/document-matching";
+import { suggestDocumentsForRequirement } from "@/lib/document-matching";
 import {
   dashboardHref,
   dashboardPageSize,
@@ -18,7 +20,6 @@ import {
   parseDashboardFilters,
 } from "@/lib/dashboard-filters";
 import { getOpportunityEditais, withEditalRequirements } from "@/lib/edital-store";
-import { getStaleStates, refreshLiveOpportunities } from "@/lib/live-refresh";
 import { searchMatchingOpportunities } from "@/lib/opportunity-store";
 import { shouldAutomaticallyReadEdital } from "@/lib/edital-automation";
 import type { EditalStatus, OpportunityEdital } from "@/lib/edital-insights";
@@ -26,15 +27,9 @@ import {
   hasStaleProfileEmbedding,
   refreshStaleProfileEmbeddings,
 } from "@/lib/profile-embedding";
-import { brazilianStateCodes, normalizeStates } from "@/lib/states";
-import { createServiceClient } from "@/lib/supabase/admin";
+import { brazilianStateCodes } from "@/lib/states";
 import { createClient } from "@/lib/supabase/server";
-import type {
-  Opportunity,
-  OpportunityCategory,
-  UserKind,
-  UserProfile,
-} from "@/lib/types";
+import type { Opportunity } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 /** Margem para a atualização do PNCP feita em segundo plano (after). */
@@ -57,31 +52,7 @@ export default async function DashboardPage({
   const { data: authData, error: authError } = await supabase.auth.getUser();
   if (authError || !authData.user) redirect("/login");
 
-  const profileResult = await supabase
-      .from("profiles")
-      .select("id, full_name, user_kind, categories, keywords, products_services, embedding_model, states, email_alerts")
-      .eq("id", authData.user.id)
-      .maybeSingle();
-  if (profileResult.error) {
-    throw new Error(`Não foi possível carregar seu perfil: ${profileResult.error.message}`);
-  }
-  if (!profileResult.data) {
-    throw new Error(
-      "Não foi possível carregar seu perfil. Confira se a migração do Supabase foi executada.",
-    );
-  }
-
-  const profile: UserProfile = {
-    id: profileResult.data.id,
-    full_name: profileResult.data.full_name,
-    user_kind: profileResult.data.user_kind as UserKind,
-    categories: profileResult.data.categories as OpportunityCategory[],
-    keywords: profileResult.data.keywords,
-    products_services: profileResult.data.products_services,
-    embedding_model: profileResult.data.embedding_model,
-    states: profileResult.data.states ?? [],
-    email_alerts: profileResult.data.email_alerts,
-  };
+  const profile = await loadDashboardProfile(supabase, authData.user.id);
 
   // Vetor de um modelo de embeddings antigo: revetoriza para a busca voltar a
   // funcionar (ela só compara vetores do mesmo modelo).
@@ -100,36 +71,11 @@ export default async function DashboardPage({
     profile.states.length > 0 ? profile.states : brazilianStateCodes;
   const filters = parseDashboardFilters(await searchParams, matchStates);
 
-  // Atualização ao vivo do PNCP: só para UFs com dados velhos e em segundo
-  // plano, para não atrasar a página. O resultado aparece no próximo acesso.
-  const liveStates =
-    profile.states.length > 0
-      ? profile.states
-      : normalizeStates((process.env.PNCP_UFS ?? "PE").split(",")).states;
-  let refreshScheduled = false;
-  let lastRefreshedAt: number | null = null;
-  if (hasSearch && searchCategories.includes("licitacoes") && process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    try {
-      const freshness = await getStaleStates(supabase, liveStates);
-      lastRefreshedAt = freshness.lastRefreshedAt;
-      if (freshness.stale.length > 0) {
-        refreshScheduled = true;
-        after(async () => {
-          try {
-            await refreshLiveOpportunities(createServiceClient(), freshness.stale);
-          } catch (error) {
-            console.error("Background PNCP refresh failed.", {
-              error: error instanceof Error ? error.message : String(error),
-            });
-          }
-        });
-      }
-    } catch (error) {
-      console.error("Could not check PNCP data freshness.", {
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }
+  const liveRefresh =
+    hasSearch && searchCategories.includes("licitacoes")
+      ? await scheduleLiveRefresh(supabase, profile.states)
+      : { scheduled: false, lastRefreshedAt: null, checkFailed: false };
+  const { scheduled: refreshScheduled, lastRefreshedAt } = liveRefresh;
 
   let matches: Opportunity[];
   let totalMatches: number;
@@ -178,23 +124,7 @@ export default async function DashboardPage({
   }
   const totalPages = Math.max(1, Math.ceil(totalMatches / dashboardPageSize));
   const filtered = hasActiveFilters(filters);
-  const priorDocuments: SuggestibleDocument[] = [];
-  for (let offset = 0; ; offset += 1000) {
-    const { data, error } = await supabase
-      .from("documents")
-      .select("id, name, document_type, expires_at, created_at")
-      .eq("user_id", authData.user.id)
-      .order("created_at", { ascending: false })
-      .order("id", { ascending: true })
-      .range(offset, offset + 999);
-    if (error) {
-      throw new Error(
-        `Não foi possível carregar seus documentos para verificar as oportunidades: ${error.message}`,
-      );
-    }
-    priorDocuments.push(...data);
-    if (data.length < 1000) break;
-  }
+  const priorDocuments = await loadPriorDocuments(supabase, authData.user.id);
   const compatibleRequirements = new Set(
     [
       ...new Set(matches.flatMap((opportunity) => opportunity.requirements)),
@@ -203,28 +133,11 @@ export default async function DashboardPage({
         suggestDocumentsForRequirement(requirement, priorDocuments).length > 0,
     ),
   );
-  const linkedRequirementsByOpportunity = new Map<string, Set<string>>();
-  if (matches.length > 0) {
-    const { data: links, error: linksError } = await supabase
-      .from("document_opportunities")
-      .select("opportunity_id, requirement")
-      .eq("user_id", authData.user.id)
-      .in(
-        "opportunity_id",
-        matches.map((opportunity) => opportunity.id),
-      );
-    if (linksError) {
-      throw new Error(
-        `Não foi possível carregar os documentos vinculados às oportunidades: ${linksError.message}`,
-      );
-    }
-    for (const link of links) {
-      const requirements =
-        linkedRequirementsByOpportunity.get(link.opportunity_id) ?? new Set<string>();
-      requirements.add(link.requirement);
-      linkedRequirementsByOpportunity.set(link.opportunity_id, requirements);
-    }
-  }
+  const linkedRequirementsByOpportunity = await loadLinkedRequirements(
+    supabase,
+    authData.user.id,
+    matches.map((opportunity) => opportunity.id),
+  );
   return (
     <div className="shell">
       <header className="topbar">
@@ -369,7 +282,9 @@ export default async function DashboardPage({
             <span className="badge">
               {refreshScheduled
                 ? "Atualizando com o PNCP em segundo plano"
-                : lastRefreshedAt
+                : liveRefresh.checkFailed
+                  ? "Não foi possível verificar a atualização do PNCP agora"
+                  : lastRefreshedAt
                   ? `PNCP atualizado ${formatAge(lastRefreshedAt)}`
                   : "Atualizado pelo cron diário"}
             </span>

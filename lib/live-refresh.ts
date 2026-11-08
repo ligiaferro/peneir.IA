@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { getPncpSettings, getUserAgent } from "@/lib/config";
 import { mapWithConcurrency } from "@/lib/concurrency";
 import { indexPendingOpportunities } from "@/lib/opportunity-indexing";
 import { upsertOpportunities } from "@/lib/opportunity-store";
@@ -45,19 +46,13 @@ export async function getStaleStates(
   };
 }
 
-function readPositiveInteger(value: string | undefined, fallback: number, max: number) {
-  const parsed = Number.parseInt(value ?? "", 10);
-  return Number.isInteger(parsed) && parsed > 0 ? Math.min(parsed, max) : fallback;
-}
-
 /**
  * Busca a primeira página do PNCP das UFs pedidas, grava e vetoriza o que for
  * novo. Feita em segundo plano (after), fora do tempo de carregamento da página.
  */
 export async function refreshLiveOpportunities(supabase: Client, states: readonly string[]) {
-  const daysAhead = readPositiveInteger(process.env.PNCP_DAYS_AHEAD, 60, 365);
-  const concurrency = readPositiveInteger(process.env.PNCP_CONCURRENCY, 3, 6);
-  const userAgent = `peneir.IA/0.1 (+${process.env.NEXT_PUBLIC_APP_URL ?? "https://peneir.ia"})`;
+  const { daysAhead, concurrency } = getPncpSettings();
+  const userAgent = getUserAgent();
 
   const results = await mapWithConcurrency(
     states,

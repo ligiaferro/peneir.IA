@@ -1,4 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { getConfiguredStates, getPncpSettings, getUserAgent } from "@/lib/config";
+import { fetchAllPages } from "@/lib/paginate";
 import { mapWithConcurrency } from "@/lib/concurrency";
 import { isCronAuthorized } from "@/lib/cron-auth";
 import {
@@ -20,14 +22,6 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
-function readPositiveInteger(value: string | undefined, fallback: number, max: number) {
-  const parsed = Number.parseInt(value ?? "", 10);
-  return Number.isInteger(parsed) && parsed > 0 ? Math.min(parsed, max) : fallback;
-}
-
-/** O PostgREST limita cada resposta (padrão: 1000 linhas). */
-const readPageSize = 1000;
-
 type ServiceClient = ReturnType<typeof createServiceClient>;
 
 /**
@@ -36,20 +30,14 @@ type ServiceClient = ReturnType<typeof createServiceClient>;
  */
 async function loadProfileStates(supabase: ServiceClient) {
   const states = new Set<string>();
-  for (let from = 0; ; from += readPageSize) {
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("states, categories")
-      .order("id")
-      .range(from, from + readPageSize - 1);
-    if (error) throw error;
-    for (const profile of data) {
-      if (profile.categories.length > 0 && !profile.categories.includes("licitacoes")) {
-        continue;
-      }
-      for (const state of profile.states) states.add(state);
+  const profiles = await fetchAllPages((from, to) =>
+    supabase.from("profiles").select("states, categories").order("id").range(from, to),
+  );
+  for (const profile of profiles) {
+    if (profile.categories.length > 0 && !profile.categories.includes("licitacoes")) {
+      continue;
     }
-    if (data.length < readPageSize) break;
+    for (const state of profile.states) states.add(state);
   }
   return normalizeStates(states).states;
 }
@@ -109,9 +97,7 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const { states: configuredStates, invalid } = normalizeStates(
-    (process.env.PNCP_UFS ?? "PE").split(","),
-  );
+  const { states: configuredStates, invalid } = getConfiguredStates();
   if (invalid.length > 0) {
     return NextResponse.json(
       { error: `PNCP_UFS inválido: ${invalid.join(", ")}.` },
@@ -142,13 +128,11 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const concurrency = readPositiveInteger(process.env.PNCP_CONCURRENCY, 3, 6);
-  const maxPages = readPositiveInteger(process.env.PNCP_MAX_PAGES, 20, 200);
-  const daysAhead = readPositiveInteger(process.env.PNCP_DAYS_AHEAD, 60, 365);
+  const { concurrency, maxPages, daysAhead } = getPncpSettings();
   const dataFinal = pncpDateParam(daysAhead);
   // Deixa folga antes do limite de execução da função.
   const stopAt = Date.now() + (maxDuration - 30) * 1000;
-  const userAgent = `peneir.IA/0.1 (+${process.env.NEXT_PUBLIC_APP_URL ?? "https://peneir.ia"})`;
+  const userAgent = getUserAgent();
 
   // Cada UF é uma consulta independente; até `concurrency` rodam ao mesmo tempo.
   const regions = await mapWithConcurrency(states, concurrency, async (uf) => {

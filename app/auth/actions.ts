@@ -2,6 +2,7 @@
 
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { getAppUrl } from "@/lib/config";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -9,7 +10,7 @@ export type AuthState = { error?: string; notice?: string };
 
 /** Origem pública do app, usada nos links enviados por e-mail. */
 async function getAppOrigin() {
-  const configured = process.env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/$/, "");
+  const configured = getAppUrl();
   if (configured) return configured;
   const requestHeaders = await headers();
   const origin = requestHeaders.get("origin");

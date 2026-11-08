@@ -388,6 +388,29 @@ h3 {
   accent-color: var(--green);
 }
 
+.state-picker {
+  margin: 0 0 16px;
+  padding: 0;
+  border: 0;
+  min-inline-size: 0;
+}
+
+.state-picker legend {
+  padding: 0;
+}
+
+.state-picker-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 8px;
+}
+
+.state-picker-actions .button[aria-pressed="true"] {
+  border-color: var(--green);
+  color: var(--green);
+}
+
 .state-options {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(58px, 1fr));

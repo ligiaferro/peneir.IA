@@ -1,3 +1,4 @@
+import { getAppUrl } from "@/lib/config";
 import { formatDeadline } from "@/lib/format";
 import type { Opportunity } from "@/lib/types";
 
@@ -45,8 +46,8 @@ export function alertEmailHtml(
 ) {
   const listed = opportunities.slice(0, maxItemsPerEmail);
   const remaining = opportunities.length - listed.length;
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
-  const dashboardUrl = appUrl ? `${appUrl.replace(/\/$/, "")}/dashboard` : null;
+  const appUrl = getAppUrl();
+  const dashboardUrl = appUrl ? `${appUrl}/dashboard` : null;
 
   const items = listed
     .map(

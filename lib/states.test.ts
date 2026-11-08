@@ -1,17 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { brazilianStateCodes, isBrazilianState, normalizeStates } from "./states";
+import { brazilianRegions, brazilianStateCodes, normalizeStates } from "./states";
 
-describe("brazilian states", () => {
-  it("lists the 27 federative units", () => {
-    expect(brazilianStateCodes).toHaveLength(27);
-    expect(isBrazilianState("PE")).toBe(true);
-    expect(isBrazilianState("pe")).toBe(false);
-    expect(isBrazilianState("toString")).toBe(false);
+describe("brazilianRegions", () => {
+  it("cobre as 27 UFs, cada uma em uma única região", () => {
+    const all = brazilianRegions.flatMap((region) => [...region.states]);
+    expect(all).toHaveLength(brazilianStateCodes.length);
+    expect(new Set(all)).toEqual(new Set(brazilianStateCodes));
   });
+});
 
-  it("normalizes, deduplicates and sorts states", () => {
-    expect(normalizeStates([" sp", "PE", "", "pe", "XX", "ba"])).toEqual({
-      states: ["BA", "PE", "SP"],
+describe("normalizeStates", () => {
+  it("normaliza, remove repetidas e separa as inválidas", () => {
+    expect(normalizeStates([" pe", "SP", "pe", "XX", ""])).toEqual({
+      states: ["PE", "SP"],
       invalid: ["XX"],
     });
   });

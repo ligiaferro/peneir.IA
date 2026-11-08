@@ -72,14 +72,16 @@ export async function POST(request: NextRequest) {
   if (!opportunityId) return NextResponse.json({ error: "Oportunidade inválida." }, { status: 400 });
 
   if (!process.env.OPENAI_API_KEY) {
+    console.error("Edital reading is unavailable: OPENAI_API_KEY is not configured.");
     return NextResponse.json(
-      { error: "A leitura do edital por IA não está configurada (OPENAI_API_KEY)." },
+      { error: "A leitura do edital por IA não está disponível no momento." },
       { status: 503 },
     );
   }
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    console.error("Edital reading is unavailable: SUPABASE_SERVICE_ROLE_KEY is not configured.");
     return NextResponse.json(
-      { error: "Configure SUPABASE_SERVICE_ROLE_KEY para salvar a leitura do edital." },
+      { error: "A leitura do edital não está disponível no momento." },
       { status: 503 },
     );
   }

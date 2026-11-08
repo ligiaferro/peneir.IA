@@ -14,6 +14,7 @@ import {
   alertEmailSubject,
   maxItemsPerEmail,
 } from "@/lib/alert-email";
+import { immediateAlertCooldownSeconds } from "@/lib/config";
 import { buildProfileEmbeddingText } from "@/lib/opportunity-indexing";
 import { listMatchingOpportunities } from "@/lib/opportunity-store";
 import {
@@ -111,7 +112,7 @@ export async function updateProfileAction(
         });
         return {
           error:
-            "Não foi possível preparar sua busca semântica. Verifique OPENAI_API_KEY, OPENAI_BASE_URL e OPENAI_EMBEDDING_MODEL.",
+            "Não foi possível preparar sua busca semântica agora. Tente novamente em instantes.",
         };
       }
     } else {
@@ -156,35 +157,43 @@ export async function updateProfileAction(
 
 export type SendAlertState = { error?: string; notice?: string };
 
-/** Intervalo mínimo entre envios imediatos do mesmo usuário. */
-const sendAlertCooldownMs = 60_000;
-/**
- * Último envio imediato por usuário. Fica na memória do servidor: protege
- * contra cliques repetidos, mas não é compartilhado entre instâncias.
- */
-const lastAlertSentAt = new Map<string, number>();
-
 /**
  * Envia agora, para o e-mail da conta, os editais relevantes do perfil (mesmo
  * matching, limiar e estados do painel). Serve para demonstração: não marca
  * nada como enviado, então o alerta diário automático segue igual.
  */
 export async function sendAlertNowAction(): Promise<SendAlertState> {
+  const supabase = await createClient();
+  const { data: wait, error: claimError } = await supabase.rpc("claim_immediate_alert", {
+    p_cooldown_seconds: immediateAlertCooldownSeconds,
+  });
+  if (claimError) {
+    console.error("Could not reserve the immediate alert slot.", { error: claimError.message });
+    return { error: "Não foi possível enviar agora. Tente novamente." };
+  }
+  if (wait > 0) return { error: `Aguarde ${wait} s para enviar de novo.` };
+
+  // O intervalo é reservado antes de tudo (no banco, valendo para todas as
+  // instâncias); se nada for enviado, a reserva é devolvida.
+  const { sent, ...state } = await deliverImmediateAlert(supabase);
+  if (!sent) {
+    const { error } = await supabase.rpc("release_immediate_alert");
+    if (error) console.error("Could not release the immediate alert slot.", { error: error.message });
+  }
+  return state;
+}
+
+async function deliverImmediateAlert(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+): Promise<SendAlertState & { sent?: boolean }> {
   if (!process.env.RESEND_API_KEY || !process.env.RESEND_FROM_EMAIL) {
-    return { error: "O envio de e-mails não está configurado (RESEND_API_KEY e RESEND_FROM_EMAIL)." };
+    return { error: "O envio de e-mails não está disponível no momento." };
   }
 
-  const supabase = await createClient();
   const { data: authData, error: authError } = await supabase.auth.getUser();
   if (authError || !authData.user) return { error: "Sua sessão expirou. Entre novamente." };
   const user = authData.user;
   if (!user.email) return { error: "Sua conta não tem um e-mail cadastrado." };
-
-  const elapsed = Date.now() - (lastAlertSentAt.get(user.id) ?? 0);
-  if (elapsed < sendAlertCooldownMs) {
-    const seconds = Math.ceil((sendAlertCooldownMs - elapsed) / 1000);
-    return { error: `Aguarde ${seconds} s para enviar de novo.` };
-  }
 
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
@@ -235,8 +244,6 @@ export async function sendAlertNowAction(): Promise<SendAlertState> {
     };
   }
 
-  // Reserva o intervalo antes de enviar, para cliques simultâneos não duplicarem.
-  lastAlertSentAt.set(user.id, Date.now());
   const resend = new Resend(process.env.RESEND_API_KEY);
   const unsubscribeUrls = buildUnsubscribeUrls(user.id);
   const { error: emailError } = await resend.emails.send({
@@ -250,7 +257,6 @@ export async function sendAlertNowAction(): Promise<SendAlertState> {
     headers: unsubscribeHeaders(unsubscribeUrls),
   });
   if (emailError) {
-    lastAlertSentAt.delete(user.id);
     console.error("Immediate opportunity email failed.", {
       userId: user.id,
       error: emailError.message,
@@ -259,6 +265,7 @@ export async function sendAlertNowAction(): Promise<SendAlertState> {
   }
 
   return {
+    sent: true,
     notice: `E-mail enviado para ${user.email} com ${relevant.length} ${
       relevant.length === 1 ? "edital relevante" : "editais relevantes"
     }.`,
