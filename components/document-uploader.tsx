@@ -2,14 +2,27 @@
 
 import { useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import type { UserDocument } from "@/lib/types";
+import type {
+  UserDocument,
+  UserDocumentOpportunityLink,
+} from "@/lib/types";
+import type { DocumentSuggestion } from "@/lib/document-matching";
 
 type Props = {
   opportunityId: string;
   fieldId: string;
   requirement: string;
   documents: UserDocument[];
-  onChange: (documents: UserDocument[]) => void;
+  suggestions: DocumentSuggestion<UserDocument>[];
+  onUploaded: (
+    document: UserDocument,
+    association: UserDocumentOpportunityLink,
+  ) => void;
+  onLinked: (
+    document: UserDocument,
+    association: UserDocumentOpportunityLink,
+  ) => void;
+  onUnlinked: (documentId: string) => void;
 };
 
 export function DocumentUploader({
@@ -17,7 +30,10 @@ export function DocumentUploader({
   fieldId,
   requirement,
   documents,
-  onChange,
+  suggestions,
+  onUploaded,
+  onLinked,
+  onUnlinked,
 }: Props) {
   const formRef = useRef<HTMLFormElement>(null);
   const [busy, setBusy] = useState(false);
@@ -36,14 +52,15 @@ export function DocumentUploader({
       });
       const result = (await response.json()) as {
         document?: UserDocument;
+        association?: UserDocumentOpportunityLink;
         error?: string;
       };
-      if (!response.ok || !result.document) {
+      if (!response.ok || !result.document || !result.association) {
         setError(result.error ?? "Não foi possível enviar o documento.");
         return;
       }
 
-      onChange([...documents, result.document]);
+      onUploaded(result.document, result.association);
       formRef.current?.reset();
       router.refresh();
     } catch {
@@ -53,24 +70,54 @@ export function DocumentUploader({
     }
   }
 
-  async function removeDocument(documentId: string) {
+  async function reuseDocument(document: UserDocument) {
     setBusy(true);
     setError("");
     try {
-      const response = await fetch("/api/documents", {
+      const response = await fetch("/api/document-opportunities", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          documentId: document.id,
+          opportunityId,
+          requirement,
+        }),
+      });
+      const result = (await response.json()) as {
+        association?: UserDocumentOpportunityLink;
+        error?: string;
+      };
+      if (!response.ok || !result.association) {
+        setError(result.error ?? "Não foi possível reutilizar o documento.");
+        return;
+      }
+      onLinked(document, result.association);
+      router.refresh();
+    } catch {
+      setError("Falha de conexão ao reutilizar o documento. Tente novamente.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function unlinkDocument(documentId: string) {
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch("/api/document-opportunities", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ documentId }),
+        body: JSON.stringify({ documentId, opportunityId, requirement }),
       });
       const result = (await response.json()) as { error?: string };
       if (!response.ok) {
-        setError(result.error ?? "Não foi possível remover o documento.");
+        setError(result.error ?? "Não foi possível desvincular o documento.");
         return;
       }
-      onChange(documents.filter((document) => document.id !== documentId));
+      onUnlinked(documentId);
       router.refresh();
     } catch {
-      setError("Falha de conexão ao remover o documento. Tente novamente.");
+      setError("Falha de conexão ao desvincular o documento. Tente novamente.");
     } finally {
       setBusy(false);
     }
@@ -78,11 +125,70 @@ export function DocumentUploader({
 
   return (
     <div className="requirement-upload">
+      {suggestions.length > 0 && (
+        <div className="document-suggestions">
+          <span className="field-label">Sugestões dos seus documentos</span>
+          <p className="field-hint">
+            Compatibilidade estimada pelo nome e tipo. Confira o conteúdo antes
+            de reutilizar.
+          </p>
+          <div className="suggestion-options">
+            {suggestions.slice(0, 5).map((suggestion) => (
+              <div className="document-suggestion" key={suggestion.document.id}>
+                <div>
+                  <div className="document-name">{suggestion.document.name}</div>
+                  <div className="document-meta">
+                    {suggestion.document.document_type} · termos em comum:{" "}
+                    {suggestion.matchingTerms.join(", ")}
+                  </div>
+                </div>
+                <button
+                  className="button button-secondary button-small"
+                  type="button"
+                  disabled={busy}
+                  onClick={() => reuseDocument(suggestion.document)}
+                >
+                  {busy ? "Vinculando..." : "Usar documento"}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {documents.length > 0 && (
+        <div className="document-list">
+          {documents.map((document) => (
+            <div className="document-row" key={document.id}>
+              <div style={{ minWidth: 0 }}>
+                <div className="document-name">{document.name}</div>
+                <div className="document-meta">
+                  {document.document_type}
+                  {document.expires_at
+                    ? ` · validade ${new Date(
+                        `${document.expires_at}T00:00:00`,
+                      ).toLocaleDateString("pt-BR")}`
+                    : " · validade não informada"}
+                </div>
+              </div>
+              <button
+                className="button button-secondary button-small"
+                type="button"
+                disabled={busy}
+                onClick={() => unlinkDocument(document.id)}
+              >
+                Desvincular
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
       <form ref={formRef} onSubmit={uploadDocument}>
         <input type="hidden" name="opportunity_id" value={opportunityId} />
         <input type="hidden" name="document_type" value={requirement} />
         <div className="field">
-          <label htmlFor={`file-${fieldId}`}>Arquivo PDF (até 4 MB)</label>
+          <label htmlFor={`file-${fieldId}`}>Ou envie um novo PDF (até 4 MB)</label>
           <input
             id={`file-${fieldId}`}
             className="input"
@@ -106,32 +212,6 @@ export function DocumentUploader({
       </form>
 
       {error && <p className="notice notice-error">{error}</p>}
-      {documents.length > 0 && (
-        <div className="document-list">
-          {documents.map((document) => (
-            <div className="document-row" key={document.id}>
-              <div style={{ minWidth: 0 }}>
-                <div className="document-name">{document.name}</div>
-                <div className="document-meta">
-                  {document.expires_at
-                    ? `Validade ${new Date(
-                        `${document.expires_at}T00:00:00`,
-                      ).toLocaleDateString("pt-BR")}`
-                    : "Validade não informada"}
-                </div>
-              </div>
-              <button
-                className="button button-secondary button-small"
-                type="button"
-                disabled={busy}
-                onClick={() => removeDocument(document.id)}
-              >
-                Remover
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }

@@ -112,8 +112,9 @@ export async function POST(request: NextRequest) {
   const documentId = body.documentId;
   let opportunity: Opportunity | null;
   let document;
+  let association;
   try {
-    const [opportunityResult, documentResult] = await Promise.all([
+    const [opportunityResult, documentResult, associationResult] = await Promise.all([
       getOpportunityById(supabase, opportunityId),
       supabase
         .from("documents")
@@ -121,10 +122,20 @@ export async function POST(request: NextRequest) {
         .eq("id", documentId)
         .eq("user_id", authData.user.id)
         .maybeSingle(),
+      supabase
+        .from("document_opportunities")
+        .select("document_id")
+        .eq("user_id", authData.user.id)
+        .eq("document_id", documentId)
+        .eq("opportunity_id", opportunityId)
+        .maybeSingle(),
     ]);
-    if (documentResult.error) throw documentResult.error;
+    if (documentResult.error || associationResult.error) {
+      throw documentResult.error ?? associationResult.error;
+    }
     opportunity = opportunityResult;
     document = documentResult.data;
+    association = associationResult.data;
   } catch {
     return NextResponse.json({ error: "Não foi possível acessar o documento." }, { status: 502 });
   }
@@ -134,9 +145,9 @@ export async function POST(request: NextRequest) {
   if (!document) {
     return NextResponse.json({ error: "Documento não encontrado." }, { status: 404 });
   }
-  if (document.opportunity_id && document.opportunity_id !== opportunity.id) {
+  if (!association) {
     return NextResponse.json(
-      { error: "Este documento foi enviado para outra oportunidade." },
+      { error: "Associe este documento a um requisito da oportunidade antes de analisá-lo." },
       { status: 403 },
     );
   }

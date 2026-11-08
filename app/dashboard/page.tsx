@@ -6,6 +6,10 @@ import { SendAlertButton } from "@/components/send-alert-button";
 import { signOutAction } from "@/app/auth/actions";
 import { getSearchCategories } from "@/lib/opportunities";
 import {
+  suggestDocumentsForRequirement,
+  type SuggestibleDocument,
+} from "@/lib/document-matching";
+import {
   listMatchingOpportunities,
   upsertOpportunities,
 } from "@/lib/opportunity-store";
@@ -200,6 +204,69 @@ export default async function DashboardPage() {
   }
   const matches = openOpportunities;
   const realMatches = matches.length;
+  const priorDocuments: SuggestibleDocument[] = [];
+  for (let offset = 0; ; offset += 1000) {
+    const { data, error } = await supabase
+      .from("documents")
+      .select("id, name, document_type, expires_at, created_at")
+      .eq("user_id", authData.user.id)
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: true })
+      .range(offset, offset + 999);
+    if (error) {
+      throw new Error(
+        `Não foi possível carregar seus documentos para verificar as oportunidades: ${error.message}`,
+      );
+    }
+    priorDocuments.push(...data);
+    if (data.length < 1000) break;
+  }
+  const compatibleRequirements = new Set(
+    [
+      ...new Set(matches.flatMap((opportunity) => opportunity.requirements)),
+    ].filter(
+      (requirement) =>
+        suggestDocumentsForRequirement(requirement, priorDocuments).length > 0,
+    ),
+  );
+  const linkedRequirementsByOpportunity = new Map<string, Set<string>>();
+  const opportunityIds = matches.map((opportunity) => opportunity.id);
+  const opportunityBatchSize = 100;
+  const linkPageSize = 1000;
+  for (
+    let start = 0;
+    start < opportunityIds.length;
+    start += opportunityBatchSize
+  ) {
+    const batch = opportunityIds.slice(start, start + opportunityBatchSize);
+    for (let offset = 0; ; offset += linkPageSize) {
+      const { data, error } = await supabase
+        .from("document_opportunities")
+        .select("opportunity_id, requirement")
+        .eq("user_id", authData.user.id)
+        .in("opportunity_id", batch)
+        .order("opportunity_id", { ascending: true })
+        .order("document_id", { ascending: true })
+        .order("requirement", { ascending: true })
+        .range(offset, offset + linkPageSize - 1);
+      if (error) {
+        throw new Error(
+          `Não foi possível carregar os documentos vinculados às oportunidades: ${error.message}`,
+        );
+      }
+      for (const link of data) {
+        const requirements =
+          linkedRequirementsByOpportunity.get(link.opportunity_id) ??
+          new Set<string>();
+        requirements.add(link.requirement);
+        linkedRequirementsByOpportunity.set(
+          link.opportunity_id,
+          requirements,
+        );
+      }
+      if (data.length < linkPageSize) break;
+    }
+  }
 
   return (
     <div className="shell">
@@ -324,6 +391,21 @@ export default async function DashboardPage() {
                 habilitação.
               </p>
             </div>
+            {matches.length > 0 && (
+              <p className="linked-document-legend">
+                <span className="requirement-linked-check" aria-hidden="true">
+                  ✓
+                </span>{" "}
+                Já adicionado
+                <span
+                  className="requirement-linked-check requirement-suggested-check"
+                  aria-hidden="true"
+                >
+                  ✓
+                </span>{" "}
+                Compatível disponível, ainda não adicionado
+              </p>
+            )}
             <span className="badge">
               {realMatches} do PNCP ·{" "}
               {pncpRefreshError
@@ -363,6 +445,17 @@ export default async function DashboardPage() {
                   <OpportunityCard
                     key={opportunity.id}
                     opportunity={opportunity}
+                    linkedRequirements={[
+                      ...(linkedRequirementsByOpportunity.get(opportunity.id) ??
+                        []),
+                    ]}
+                    suggestedRequirements={opportunity.requirements.filter(
+                      (requirement) =>
+                        !linkedRequirementsByOpportunity
+                          .get(opportunity.id)
+                          ?.has(requirement) &&
+                        compatibleRequirements.has(requirement),
+                    )}
                   />
                 );
               })}

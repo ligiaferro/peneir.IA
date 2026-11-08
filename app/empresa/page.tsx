@@ -14,7 +14,8 @@ export default async function CompanyPage() {
   const { data: authData, error: authError } = await supabase.auth.getUser();
   if (authError || !authData.user) redirect("/login");
 
-  const [profileResult, documentsResult, analysesResult] = await Promise.all([
+  const [profileResult, documentsResult, analysesResult, linksResult] =
+    await Promise.all([
     supabase
       .from("profiles")
       .select("id, full_name, user_kind, categories, keywords, products_services, embedding_model, states, email_alerts")
@@ -29,6 +30,10 @@ export default async function CompanyPage() {
       .from("document_analyses")
       .select("document_id, opportunity_id")
       .eq("user_id", authData.user.id),
+    supabase
+      .from("document_opportunities")
+      .select("document_id, opportunity_id, requirement")
+      .eq("user_id", authData.user.id),
   ]);
   if (profileResult.error || !profileResult.data) {
     throw new Error("Não foi possível carregar os dados da empresa.");
@@ -38,6 +43,9 @@ export default async function CompanyPage() {
   }
   if (analysesResult.error) {
     throw new Error(`Não foi possível carregar o histórico: ${analysesResult.error.message}`);
+  }
+  if (linksResult.error) {
+    throw new Error(`Não foi possível carregar os vínculos dos documentos: ${linksResult.error.message}`);
   }
   if (profileResult.data.user_kind !== "empresa") redirect("/dashboard");
 
@@ -58,6 +66,7 @@ export default async function CompanyPage() {
         document.opportunity_id ? [document.opportunity_id] : [],
       ),
       ...analysesResult.data.map((analysis) => analysis.opportunity_id),
+      ...linksResult.data.map((link) => link.opportunity_id),
     ]),
   ];
   const opportunitiesResult =
@@ -76,24 +85,50 @@ export default async function CompanyPage() {
       opportunity,
     ]),
   );
-  const analysesByDocument = new Map<string, Set<string>>();
+  const opportunityIdsByDocument = new Map<string, Map<string, Set<string>>>();
+  const addOpportunityForDocument = (
+    documentId: string,
+    opportunityId: string,
+    requirement?: string,
+  ) => {
+    const linked = opportunityIdsByDocument.get(documentId) ?? new Map();
+    const requirements = linked.get(opportunityId) ?? new Set<string>();
+    if (requirement) requirements.add(requirement);
+    linked.set(opportunityId, requirements);
+    opportunityIdsByDocument.set(documentId, linked);
+  };
+  for (const link of linksResult.data) {
+    addOpportunityForDocument(
+      link.document_id,
+      link.opportunity_id,
+      link.requirement,
+    );
+  }
   for (const analysis of analysesResult.data) {
-    const linked = analysesByDocument.get(analysis.document_id) ?? new Set();
-    linked.add(analysis.opportunity_id);
-    analysesByDocument.set(analysis.document_id, linked);
+    addOpportunityForDocument(analysis.document_id, analysis.opportunity_id);
   }
   const companyDocuments: CompanyDocument[] = documentsResult.data.map(
     (document) => {
-      const opportunityIds = new Set(analysesByDocument.get(document.id) ?? []);
-      if (document.opportunity_id) opportunityIds.add(document.opportunity_id);
+      const relatedOpportunities =
+        opportunityIdsByDocument.get(document.id) ?? new Map();
+      if (document.opportunity_id) {
+        addOpportunityForDocument(
+          document.id,
+          document.opportunity_id,
+          document.document_type,
+        );
+      }
+      const documentOpportunities =
+        opportunityIdsByDocument.get(document.id) ?? relatedOpportunities;
       return {
         ...document,
-        opportunities: [...opportunityIds]
-          .map((id) => opportunities.get(id))
-          .filter(
-            (opportunity): opportunity is NonNullable<typeof opportunity> =>
-              opportunity !== undefined,
-          ),
+        opportunities: [...documentOpportunities.entries()]
+          .flatMap(([id, requirements]) => {
+            const opportunity = opportunities.get(id);
+            return opportunity
+              ? [{ ...opportunity, requirements: [...requirements] }]
+              : [];
+          }),
       };
     },
   );

@@ -4,7 +4,11 @@ import { signOutAction } from "@/app/auth/actions";
 import { OpportunityDetail } from "@/components/opportunity-detail";
 import { getOpportunityById } from "@/lib/opportunity-store";
 import { createClient } from "@/lib/supabase/server";
-import type { AnalysisResult, UserDocument } from "@/lib/types";
+import type {
+  AnalysisResult,
+  UserDocument,
+  UserDocumentOpportunityLink,
+} from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +25,13 @@ export default async function OpportunityPage({
   const { data: authData, error: authError } = await supabase.auth.getUser();
   if (authError || !authData.user) redirect("/login");
 
-  const [opportunity, profileResult, documentsResult, analysesResult] =
+  const [
+    opportunity,
+    profileResult,
+    documentsResult,
+    analysesResult,
+    linksResult,
+  ] =
     await Promise.all([
       getOpportunityById(supabase, opportunityId),
       supabase
@@ -39,6 +49,11 @@ export default async function OpportunityPage({
         .select("document_id, opportunity_id, result")
         .eq("user_id", authData.user.id)
         .eq("opportunity_id", opportunityId),
+      supabase
+        .from("document_opportunities")
+        .select("user_id, document_id, opportunity_id, requirement, created_at")
+        .eq("user_id", authData.user.id)
+        .eq("opportunity_id", opportunityId),
     ]);
 
   if (!opportunity) notFound();
@@ -51,12 +66,12 @@ export default async function OpportunityPage({
   if (analysesResult.error) {
     throw new Error(`Não foi possível carregar as análises: ${analysesResult.error.message}`);
   }
+  if (linksResult.error) {
+    throw new Error(`Não foi possível carregar os vínculos dos documentos: ${linksResult.error.message}`);
+  }
 
-  const documents = (documentsResult.data as UserDocument[]).filter(
-    (document) =>
-      document.opportunity_id === null ||
-      document.opportunity_id === opportunityId,
-  );
+  const documents = documentsResult.data as UserDocument[];
+  const links = linksResult.data as UserDocumentOpportunityLink[];
   const analyses = analysesResult.data.map((analysis) => ({
     document_id: analysis.document_id,
     result: analysis.result as AnalysisResult,
@@ -95,6 +110,7 @@ export default async function OpportunityPage({
           opportunity={opportunity}
           initialDocuments={documents}
           initialAnalyses={analyses}
+          initialLinks={links}
         />
       </main>
     </div>

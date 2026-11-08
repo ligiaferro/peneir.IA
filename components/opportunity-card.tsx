@@ -9,8 +9,12 @@ import type { Opportunity } from "@/lib/types";
 
 export function OpportunityCard({
   opportunity,
+  linkedRequirements,
+  suggestedRequirements,
 }: {
   opportunity: Opportunity;
+  linkedRequirements: string[];
+  suggestedRequirements: string[];
 }) {
   const similarity = opportunity.matchScore ?? 0;
   const similarityPercentage = similarityToPercentage(similarity);
@@ -48,8 +52,29 @@ export function OpportunityCard({
           : "Requisitos informados no edital"}
       </span>
       <ul className="requirements">
-        {opportunity.requirements.map((requirement) => (
-          <li key={requirement}>{requirement}</li>
+        {opportunity.requirements.map((requirement, index) => (
+          <li key={`${index}-${requirement}`}>
+            {requirement}
+            {linkedRequirements.includes(requirement) ? (
+              <span
+                className="requirement-linked-check"
+                role="img"
+                aria-label="Documento vinculado"
+                title="Documento vinculado a esta oportunidade"
+              >
+                ✓
+              </span>
+            ) : suggestedRequirements.includes(requirement) ? (
+              <span
+                className="requirement-linked-check requirement-suggested-check"
+                role="img"
+                aria-label="Documento compatível disponível, ainda não adicionado"
+                title="Há um documento compatível disponível, mas ainda não foi adicionado"
+              >
+                ✓
+              </span>
+            ) : null}
+          </li>
         ))}
       </ul>
       <div className="card-footer">

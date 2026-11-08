@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { DocumentUploader } from "@/components/document-uploader";
+import { suggestDocumentsForRequirement } from "@/lib/document-matching";
 import { formatDate, formatDeadline } from "@/lib/format";
 import { categoryLabels } from "@/lib/opportunities";
 import {
@@ -13,6 +14,7 @@ import type {
   AnalysisResult,
   Opportunity,
   UserDocument,
+  UserDocumentOpportunityLink,
 } from "@/lib/types";
 
 type AnalysisRecord = {
@@ -24,21 +26,38 @@ export function OpportunityDetail({
   opportunity,
   initialDocuments,
   initialAnalyses,
+  initialLinks,
 }: {
   opportunity: Opportunity;
   initialDocuments: UserDocument[];
   initialAnalyses: AnalysisRecord[];
+  initialLinks: UserDocumentOpportunityLink[];
 }) {
   const [documents, setDocuments] = useState(initialDocuments);
-  const [documentId, setDocumentId] = useState(initialDocuments[0]?.id ?? "");
+  const [links, setLinks] = useState(initialLinks);
+  const [dismissedSuggestionIds, setDismissedSuggestionIds] = useState(
+    new Set<string>(),
+  );
+  const [documentId, setDocumentId] = useState(
+    initialLinks[0]?.document_id ?? "",
+  );
   const [analyses, setAnalyses] = useState(initialAnalyses);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const router = useRouter();
   const requirements =
-    opportunity.requirements.length > 0
-      ? opportunity.requirements
+    [...new Set(opportunity.requirements.filter(Boolean))].length > 0
+      ? [...new Set(opportunity.requirements.filter(Boolean))]
       : ["Documento complementar"];
+  const opportunityDocuments = [
+    ...new Set(
+      links
+        .filter((link) => link.opportunity_id === opportunity.id)
+        .map((link) => link.document_id),
+    ),
+  ]
+    .map((id) => documents.find((document) => document.id === id))
+    .filter((document): document is UserDocument => document !== undefined);
 
   const currentAnalysis = useMemo(
     () => analyses.find((analysis) => analysis.document_id === documentId),
@@ -49,21 +68,46 @@ export function OpportunityDetail({
     isGreatMatchScore(opportunity.matchScore);
 
   useEffect(() => {
-    if (!documents.some((document) => document.id === documentId)) {
-      setDocumentId(documents[0]?.id ?? "");
+    if (!opportunityDocuments.some((document) => document.id === documentId)) {
+      setDocumentId(opportunityDocuments[0]?.id ?? "");
     }
-  }, [documents, documentId]);
+  }, [opportunityDocuments, documentId]);
 
-  function updateRequirementDocuments(
-    requirement: string,
-    requirementDocuments: UserDocument[],
+  function addDocumentAssociation(
+    document: UserDocument,
+    association: UserDocumentOpportunityLink,
   ) {
-    setDocuments((currentDocuments) => [
-      ...currentDocuments.filter(
-        (document) => document.document_type !== requirement,
+    setDocuments((currentDocuments) =>
+      currentDocuments.some((item) => item.id === document.id)
+        ? currentDocuments
+        : [document, ...currentDocuments],
+    );
+    setLinks((currentLinks) =>
+      currentLinks.some(
+        (link) =>
+          link.document_id === association.document_id &&
+          link.opportunity_id === association.opportunity_id &&
+          link.requirement === association.requirement,
+      )
+        ? currentLinks
+        : [...currentLinks, association],
+    );
+  }
+
+  function removeDocumentAssociation(requirement: string, documentId: string) {
+    setDismissedSuggestionIds((currentIds) =>
+      new Set([...currentIds, `${requirement}\u0000${documentId}`]),
+    );
+    setLinks((currentLinks) =>
+      currentLinks.filter(
+        (link) =>
+          !(
+            link.opportunity_id === opportunity.id &&
+            link.requirement === requirement &&
+            link.document_id === documentId
+          ),
       ),
-      ...requirementDocuments,
-    ]);
+    );
   }
 
   async function analyze() {
@@ -145,7 +189,8 @@ export function OpportunityDetail({
             <h2>Documentos solicitados</h2>
             <p>
               Envie um PDF no campo correspondente a cada documento. Os arquivos
-              ficam associados somente a esta oportunidade.
+              ficam associados ao requisito e à oportunidade; a reutilização
+              mantém o arquivo privado original, sem criar cópias.
             </p>
           </div>
         </div>
@@ -167,11 +212,40 @@ export function OpportunityDetail({
                 opportunityId={opportunity.id}
                 fieldId={`requirement-${index}`}
                 requirement={requirement}
-                documents={documents.filter(
-                  (document) => document.document_type === requirement,
+                documents={links
+                  .filter(
+                    (link) =>
+                      link.opportunity_id === opportunity.id &&
+                      link.requirement === requirement,
+                  )
+                  .map((link) =>
+                    documents.find(
+                      (document) => document.id === link.document_id,
+                    ),
+                  )
+                  .filter(
+                    (document): document is UserDocument =>
+                      document !== undefined,
+                  )}
+                suggestions={suggestDocumentsForRequirement(
+                  requirement,
+                  documents.filter(
+                    (document) =>
+                      !links.some(
+                        (link) =>
+                          link.opportunity_id === opportunity.id &&
+                          link.requirement === requirement &&
+                          link.document_id === document.id,
+                      ) &&
+                      !dismissedSuggestionIds.has(
+                        `${requirement}\u0000${document.id}`,
+                      ),
+                  ),
                 )}
-                onChange={(requirementDocuments) =>
-                  updateRequirementDocuments(requirement, requirementDocuments)
+                onUploaded={addDocumentAssociation}
+                onLinked={addDocumentAssociation}
+                onUnlinked={(documentId) =>
+                  removeDocumentAssociation(requirement, documentId)
                 }
               />
             </section>
@@ -181,7 +255,7 @@ export function OpportunityDetail({
 
       <section className="section analysis-box">
         <h2>Comparar documento com esta oportunidade</h2>
-        {documents.length === 0 ? (
+        {opportunityDocuments.length === 0 ? (
           <p>Envie um documento solicitado acima para iniciar a análise.</p>
         ) : (
           <div className="form-grid">
@@ -193,7 +267,7 @@ export function OpportunityDetail({
                 value={documentId}
                 onChange={(event) => setDocumentId(event.target.value)}
               >
-                {documents.map((document) => (
+                {opportunityDocuments.map((document) => (
                   <option value={document.id} key={document.id}>
                     {document.document_type} — {document.name}
                   </option>

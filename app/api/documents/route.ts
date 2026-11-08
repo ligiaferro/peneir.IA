@@ -1,6 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import type { UserDocument } from "@/lib/types";
+import type {
+  UserDocument,
+  UserDocumentOpportunityLink,
+} from "@/lib/types";
 
 const maxFileSize = 4 * 1024 * 1024;
 
@@ -35,7 +38,7 @@ export async function POST(request: NextRequest) {
   }
   const { data: opportunity, error: opportunityError } = await supabase
     .from("opportunities")
-    .select("id")
+    .select("id, requirements")
     .eq("id", opportunityId)
     .maybeSingle();
   if (opportunityError) {
@@ -46,6 +49,16 @@ export async function POST(request: NextRequest) {
   }
   if (!opportunity) {
     return NextResponse.json({ error: "Oportunidade não encontrada." }, { status: 404 });
+  }
+  const validRequirement =
+    opportunity.requirements.includes(documentType) ||
+    (opportunity.requirements.length === 0 &&
+      documentType === "Documento complementar");
+  if (!validRequirement) {
+    return NextResponse.json(
+      { error: "O documento deve corresponder a um requisito desta oportunidade." },
+      { status: 400 },
+    );
   }
   if (file.type !== "application/pdf" || !file.name.toLowerCase().endsWith(".pdf")) {
     return NextResponse.json({ error: "Envie somente arquivos PDF." }, { status: 400 });
@@ -130,7 +143,51 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  return NextResponse.json({ document }, { status: 201 });
+  const { data: insertedAssociation, error: associationError } = await supabase
+    .from("document_opportunities")
+    .insert({
+      user_id: authData.user.id,
+      document_id: document.id,
+      opportunity_id: opportunityId,
+      requirement: documentType,
+    })
+    .select("user_id, document_id, opportunity_id, requirement, created_at")
+    .single();
+  if (associationError) {
+    console.error("Could not link a newly uploaded document to its requirement.", {
+      userId: authData.user.id,
+      error: associationError.message,
+    });
+    const { error: deleteError } = await supabase
+      .from("documents")
+      .delete()
+      .eq("id", document.id)
+      .eq("user_id", authData.user.id);
+    if (deleteError) {
+      console.error("Could not remove document metadata after link failure.", {
+        userId: authData.user.id,
+        documentId: document.id,
+        error: deleteError.message,
+      });
+    }
+    const { error: cleanupError } = await supabase.storage
+      .from("documents")
+      .remove([storagePath]);
+    if (cleanupError) {
+      console.error("Could not remove document storage after link failure.", {
+        userId: authData.user.id,
+        documentId: document.id,
+        error: cleanupError.message,
+      });
+    }
+    return NextResponse.json(
+      { error: "O documento foi recebido, mas não pôde ser associado ao requisito." },
+      { status: 502 },
+    );
+  }
+
+  const association: UserDocumentOpportunityLink = insertedAssociation;
+  return NextResponse.json({ document, association }, { status: 201 });
 }
 
 export async function PATCH(request: NextRequest) {

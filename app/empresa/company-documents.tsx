@@ -5,7 +5,12 @@ import { useRouter } from "next/navigation";
 import type { UserDocument } from "@/lib/types";
 
 export type CompanyDocument = UserDocument & {
-  opportunities: Array<{ id: string; title: string; source_url: string }>;
+  opportunities: Array<{
+    id: string;
+    title: string;
+    source_url: string;
+    requirements: string[];
+  }>;
 };
 
 export function CompanyDocuments({
@@ -124,6 +129,12 @@ export function CompanyDocuments({
                           >
                             {opportunity.title}
                           </a>
+                          {opportunity.requirements.length > 0 && (
+                            <span className="document-meta">
+                              {" "}
+                              · {opportunity.requirements.join("; ")}
+                            </span>
+                          )}
                         </li>
                       ))}
                     </ul>

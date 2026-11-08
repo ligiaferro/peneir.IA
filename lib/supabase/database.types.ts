@@ -103,6 +103,45 @@ export type Database = {
           },
         ];
       };
+      document_opportunities: {
+        Row: {
+          user_id: string;
+          document_id: string;
+          opportunity_id: string;
+          requirement: string;
+          created_at: string;
+        };
+        Insert: {
+          user_id: string;
+          document_id: string;
+          opportunity_id: string;
+          requirement: string;
+          created_at?: string;
+        };
+        Update: {
+          user_id?: string;
+          document_id?: string;
+          opportunity_id?: string;
+          requirement?: string;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "document_opportunities_document_id_user_id_fkey";
+            columns: ["document_id", "user_id"];
+            isOneToOne: false;
+            referencedRelation: "documents";
+            referencedColumns: ["id", "user_id"];
+          },
+          {
+            foreignKeyName: "document_opportunities_opportunity_id_fkey";
+            columns: ["opportunity_id"];
+            isOneToOne: false;
+            referencedRelation: "opportunities";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       document_analyses: {
         Row: {
           id: string;

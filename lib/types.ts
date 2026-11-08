@@ -56,6 +56,14 @@ export type UserDocument = {
   created_at: string;
 };
 
+export type UserDocumentOpportunityLink = {
+  user_id: string;
+  document_id: string;
+  opportunity_id: string;
+  requirement: string;
+  created_at: string;
+};
+
 export type AnalysisResult = {
   documentSummary: string;
   extractedExpiryDate: string | null;
