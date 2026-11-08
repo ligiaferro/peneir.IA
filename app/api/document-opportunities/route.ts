@@ -98,6 +98,8 @@ export async function POST(request: NextRequest) {
         document_id: body.documentId,
         opportunity_id: body.opportunityId,
         requirement,
+        // Escolha explícita da pessoa: o relatório da IA não substitui este vínculo.
+        added_by: "user",
       },
       { onConflict: "document_id,opportunity_id,requirement" },
     )
@@ -109,6 +111,21 @@ export async function POST(request: NextRequest) {
       error: associationError.message,
     });
     return NextResponse.json({ error: "Não foi possível associar o documento." }, { status: 502 });
+  }
+
+  // Vincular de novo desfaz uma rejeição anterior deste par.
+  const { error: undismissError } = await supabase
+    .from("document_link_dismissals")
+    .delete()
+    .eq("user_id", authData.user.id)
+    .eq("document_id", body.documentId)
+    .eq("opportunity_id", body.opportunityId)
+    .eq("requirement", requirement);
+  if (undismissError) {
+    console.error("Could not clear a document link dismissal.", {
+      userId: authData.user.id,
+      error: undismissError.message,
+    });
   }
 
   return NextResponse.json({ association }, { status: 201 });
@@ -144,6 +161,23 @@ export async function DELETE(request: NextRequest) {
   }
   if (data.length === 0) {
     return NextResponse.json({ error: "Vínculo de documento não encontrado." }, { status: 404 });
+  }
+
+  // Lembra a rejeição para o relatório da IA não recriar este vínculo.
+  const { error: dismissError } = await supabase.from("document_link_dismissals").upsert(
+    {
+      user_id: authData.user.id,
+      document_id: body.documentId,
+      opportunity_id: body.opportunityId,
+      requirement: body.requirement,
+    },
+    { onConflict: "document_id,opportunity_id,requirement", ignoreDuplicates: true },
+  );
+  if (dismissError) {
+    console.error("Could not record a document link dismissal.", {
+      userId: authData.user.id,
+      error: dismissError.message,
+    });
   }
   return NextResponse.json({ success: true });
 }

@@ -35,6 +35,7 @@ import {
 } from "@/lib/profile-embedding";
 import { brazilianStateCodes } from "@/lib/states";
 import { createClient } from "@/lib/supabase/server";
+import { getSessionUser } from "@/lib/supabase/session";
 import type { Opportunity } from "@/lib/types";
 import { BrandMark } from "@/components/brand-mark";
 
@@ -56,10 +57,10 @@ export default async function DashboardPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const supabase = await createClient();
-  const { data: authData, error: authError } = await supabase.auth.getUser();
-  if (authError || !authData.user) redirect("/login");
+  const user = await getSessionUser(supabase);
+  if (!user) redirect("/login");
 
-  const profile = await loadDashboardProfile(supabase, authData.user.id);
+  const profile = await loadDashboardProfile(supabase, user.id);
 
   // Vetor de um modelo de embeddings antigo: revetoriza para a busca voltar a
   // funcionar (ela só compara vetores do mesmo modelo).
@@ -78,18 +79,13 @@ export default async function DashboardPage({
     profile.states.length > 0 ? profile.states : brazilianStateCodes;
   const filters = parseDashboardFilters(await searchParams, matchStates);
 
-  const liveRefresh =
+  // Consultas independentes em paralelo: cada ida ao banco custa uma viagem
+  // de rede, e em sequência elas somavam segundos a cada navegação.
+  const [liveRefresh, searchResult, priorDocuments] = await Promise.all([
     hasSearch && searchCategories.includes("licitacoes")
-      ? await scheduleLiveRefresh(supabase, profile.states)
-      : { scheduled: false, lastRefreshedAt: null, checkFailed: false };
-  const { scheduled: refreshScheduled, lastRefreshedAt } = liveRefresh;
-
-  let matches: Opportunity[];
-  let totalMatches: number;
-  const editalStatuses = new Map<string, EditalStatus>();
-  let editalStatusUnavailable = false;
-  try {
-    const result = await searchMatchingOpportunities(supabase, profile.id, {
+      ? scheduleLiveRefresh(supabase, profile.states)
+      : Promise.resolve({ scheduled: false, lastRefreshedAt: null, checkFailed: false }),
+    searchMatchingOpportunities(supabase, profile.id, {
       categories: searchCategories,
       regions: filters.uf ? [filters.uf] : matchStates,
       query: filters.query,
@@ -99,42 +95,46 @@ export default async function DashboardPage({
       order: filters.order,
       page: filters.page,
       pageSize: dashboardPageSize,
-    });
-    totalMatches = result.total;
-    // Os requisitos lidos do edital substituem a lista genérica nos cards.
-    let editais = new Map<string, OpportunityEdital>();
-    try {
-      editais = await getOpportunityEditais(
-        supabase,
-        result.opportunities.map(({ id }) => id),
+    }).catch((error: unknown) => {
+      const message =
+        error && typeof error === "object" && "message" in error
+          ? String(error.message)
+          : "erro desconhecido";
+      throw new Error(
+        `Não foi possível carregar as oportunidades: ${message}. Confira se todas as migrações foram executadas.`,
       );
-      for (const [id, edital] of editais) {
-        // Leitura "em andamento" parada há muito tempo foi interrompida: trata
-        // como não lida, para ser retomada (se compatível) em vez de girar
-        // para sempre.
-        if (!isEditalProcessingStale(edital)) editalStatuses.set(id, edital.status);
-      }
-    } catch (error) {
+    }),
+    loadPriorDocuments(supabase, user.id),
+  ]);
+  const { scheduled: refreshScheduled, lastRefreshedAt } = liveRefresh;
+  const totalMatches = searchResult.total;
+  const pageIds = searchResult.opportunities.map(({ id }) => id);
+
+  const editalStatuses = new Map<string, EditalStatus>();
+  let editalStatusUnavailable = false;
+  const [editais, linkedRequirementsByOpportunity] = await Promise.all([
+    getOpportunityEditais(supabase, pageIds).catch((error: unknown) => {
       editalStatusUnavailable = true;
       console.error("Could not load edital status for dashboard cards.", {
         error: error instanceof Error ? error.message : String(error),
       });
-    }
-    matches = result.opportunities.map((opportunity) =>
-      withEditalRequirements(opportunity, editais.get(opportunity.id) ?? null),
-    );
-  } catch (error) {
-    const message =
-      error && typeof error === "object" && "message" in error
-        ? String(error.message)
-        : "erro desconhecido";
-    throw new Error(
-      `Não foi possível carregar as oportunidades: ${message}. Confira se todas as migrações foram executadas.`,
-    );
+      return new Map<string, OpportunityEdital>();
+    }),
+    loadLinkedRequirements(supabase, user.id, pageIds),
+  ]);
+  for (const [id, edital] of editais) {
+    // Leitura "em andamento" parada há muito tempo foi interrompida: trata
+    // como não lida, para ser retomada (se compatível) em vez de girar
+    // para sempre.
+    if (!isEditalProcessingStale(edital)) editalStatuses.set(id, edital.status);
   }
+  // Os requisitos lidos do edital substituem a lista genérica nos cards.
+  const matches: Opportunity[] = searchResult.opportunities.map((opportunity) =>
+    withEditalRequirements(opportunity, editais.get(opportunity.id) ?? null),
+  );
+
   const totalPages = Math.max(1, Math.ceil(totalMatches / dashboardPageSize));
   const filtered = hasActiveFilters(filters);
-  const priorDocuments = await loadPriorDocuments(supabase, authData.user.id);
   const compatibleRequirements = new Set(
     [
       ...new Set(matches.flatMap((opportunity) => opportunity.requirements)),
@@ -155,20 +155,15 @@ export default async function DashboardPage({
       );
   scheduleAutomaticEditalReads(autoReadOpportunities, maxDuration);
   const autoReadIds = new Set(autoReadOpportunities.map(({ id }) => id));
-  const linkedRequirementsByOpportunity = await loadLinkedRequirements(
-    supabase,
-    authData.user.id,
-    matches.map((opportunity) => opportunity.id),
-  );
   return (
     <div className="shell">
       <header className="topbar">
-        <a className="brand" href="/dashboard">
+        <Link className="brand" href="/dashboard">
           <BrandMark />
           peneir.IA
-        </a>
+        </Link>
         <div className="top-actions">
-          <span className="user-chip">{authData.user.email}</span>
+          <span className="user-chip">{user.email}</span>
           {profile.user_kind === "empresa" && (
             <Link className="button button-secondary button-small" href="/empresa">
               Minha empresa
@@ -327,8 +322,8 @@ export default async function DashboardPage({
               automática dos cards foi pausada; confira a migração 0008.
             </p>
           )}
-          {profile.embedding_model && authData.user.email && (
-            <SendAlertButton email={authData.user.email} />
+          {profile.embedding_model && user.email && (
+            <SendAlertButton email={user.email} />
           )}
           {!profile.embedding_model ? (
             <div className="empty-state">

@@ -2,6 +2,10 @@ import { after, NextResponse, type NextRequest } from "next/server";
 import { editalLimits, processOpportunityEdital } from "@/lib/edital";
 import { getOpportunityEdital, getOpportunityEditais } from "@/lib/edital-store";
 import { getOpportunityById } from "@/lib/opportunity-store";
+import {
+  canRunDocumentReport,
+  requestBackgroundDocumentReport,
+} from "@/lib/document-report-run";
 import { sendOpportunityReportEmail } from "@/lib/report-email-send";
 import {
   haveEditalFilesChanged,
@@ -80,6 +84,9 @@ export async function POST(request: NextRequest) {
   const session = await authenticate();
   if (!session) return NextResponse.json({ error: "Entre para continuar." }, { status: 401 });
   const { supabase, user } = session;
+  // Para pedir o relatório de documentos em segundo plano com a mesma sessão.
+  const origin = request.nextUrl.origin;
+  const cookie = request.headers.get("cookie");
 
   let opportunityId = "";
   let check = false;
@@ -145,7 +152,13 @@ export async function POST(request: NextRequest) {
   if (claimed) {
     after(async () => {
       await processOpportunityEdital(admin, opportunity);
-      if (notify) {
+      if (!notify) return;
+      const edital = await getOpportunityEdital(supabase, opportunity.id).catch(() => null);
+      if (await canRunDocumentReport(supabase, user.id, edital).catch(() => false)) {
+        // O relatório roda em outra requisição (com tempo próprio), mesmo que a
+        // página tenha sido fechada, e envia o e-mail completo ao terminar.
+        await requestBackgroundDocumentReport({ origin, cookie, opportunityId: opportunity.id });
+      } else {
         await sendOpportunityReportEmail({
           supabase,
           user,

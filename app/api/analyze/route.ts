@@ -1,16 +1,17 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getOpportunityEdital, withEditalRequirements } from "@/lib/edital-store";
+import { documentReportLimits, extractAndStoreDocumentText } from "@/lib/document-report-ai";
 import { getExpiryWarnings } from "@/lib/expiry";
 import { createChatModel, createJsonChain, isChatModelConfigured } from "@/lib/llm";
 import { parseModelJson } from "@/lib/model-json";
 import { getOpportunityById } from "@/lib/opportunity-store";
-import { extractPdfText } from "@/lib/pdf-text";
 import { createClient } from "@/lib/supabase/server";
 import type { AnalysisResult, Opportunity } from "@/lib/types";
 
 export const runtime = "nodejs";
 
-const maxExtractedTextLength = 48_000;
+/** O texto guardado no envio já vem limitado a este tamanho. */
+const maxExtractedTextLength = documentReportLimits.extractChars;
 const requirementStatuses = [
   "atende",
   "parcial",
@@ -111,7 +112,9 @@ export async function POST(request: NextRequest) {
         getOpportunityEdital(supabase, opportunityId).catch(() => null),
         supabase
           .from("documents")
-          .select("id, user_id, opportunity_id, name, document_type, expires_at, storage_path")
+          .select(
+            "id, user_id, opportunity_id, name, document_type, expires_at, storage_path, extracted_text, text_extracted_at",
+          )
           .eq("id", documentId)
           .eq("user_id", authData.user.id)
           .maybeSingle(),
@@ -169,19 +172,16 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const { data: file, error: fileError } = await supabase.storage
-    .from("documents")
-    .download(document.storage_path);
-  if (fileError || !file) {
-    return NextResponse.json({ error: "Não foi possível obter o arquivo privado." }, { status: 502 });
-  }
-  if (file.size > 4 * 1024 * 1024) {
-    return NextResponse.json({ error: "O documento excede o limite de análise." }, { status: 413 });
+  // Reaproveita o texto extraído no envio; só baixa e extrai o PDF se ainda
+  // não houver texto guardado (o resultado fica guardado para as próximas).
+  const extractedText = document.text_extracted_at
+    ? (document.extracted_text ?? "")
+    : await extractAndStoreDocumentText(supabase, authData.user.id, document);
+  if (extractedText === null) {
+    return NextResponse.json({ error: "Não foi possível ler o arquivo privado." }, { status: 502 });
   }
 
   try {
-    const bytes = Buffer.from(await file.arrayBuffer());
-    const { text: extractedText } = await extractPdfText(bytes);
     if (!extractedText) {
       return NextResponse.json(
         {
@@ -192,7 +192,7 @@ export async function POST(request: NextRequest) {
       );
     }
     const documentText =
-      extractedText.length > maxExtractedTextLength
+      extractedText.length >= maxExtractedTextLength
         ? `${extractedText.slice(0, maxExtractedTextLength)}\n[Texto truncado por exceder o limite de análise.]`
         : extractedText;
     const editalDetails = !opportunity.requirementsAreGeneric ? edital?.insights : null;

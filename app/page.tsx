@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { createClient } from "@/lib/supabase/server";
+import { getSessionUser } from "@/lib/supabase/session";
 import { BrandMark } from "@/components/brand-mark";
 
 export const metadata: Metadata = {
@@ -162,8 +163,7 @@ export default async function HomePage({
 }) {
   const { conta } = await searchParams;
   const supabase = await createClient();
-  const { data } = await supabase.auth.getUser();
-  const signedIn = Boolean(data.user);
+  const signedIn = Boolean(await getSessionUser(supabase));
 
   return (
     <div className="lp">

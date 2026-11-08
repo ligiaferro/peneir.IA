@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { signOutAction } from "@/app/auth/actions";
 import { formatDate } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
+import { getSessionUser } from "@/lib/supabase/session";
 import {
   acceptTermsFormAction,
   setAiConsentFormAction,
@@ -18,13 +19,13 @@ export const dynamic = "force-dynamic";
 
 export default async function AccountPage() {
   const supabase = await createClient();
-  const { data: authData } = await supabase.auth.getUser();
-  if (!authData.user) redirect("/login");
+  const user = await getSessionUser(supabase);
+  if (!user) redirect("/login");
 
   const { data: profile, error } = await supabase
     .from("profiles")
     .select("full_name, user_kind, email_alerts, report_emails, terms_accepted_at, ai_consent_at, created_at")
-    .eq("id", authData.user.id)
+    .eq("id", user.id)
     .maybeSingle();
   if (error || !profile) {
     throw new Error("Não foi possível carregar sua conta. Confira se a migração 0009 foi executada.");
@@ -38,7 +39,7 @@ export default async function AccountPage() {
           peneir.IA
         </Link>
         <div className="top-actions">
-          <span className="user-chip">{authData.user.email}</span>
+          <span className="user-chip">{user.email}</span>
           {profile.user_kind === "empresa" && (
             <Link className="button button-secondary button-small" href="/empresa">
               Minha empresa
@@ -60,7 +61,7 @@ export default async function AccountPage() {
           <div>
             <h1>Conta e privacidade</h1>
             <p>
-              {profile.full_name || authData.user.email} · conta criada em{" "}
+              {profile.full_name || user.email} · conta criada em{" "}
               {formatDate(profile.created_at)}
             </p>
           </div>

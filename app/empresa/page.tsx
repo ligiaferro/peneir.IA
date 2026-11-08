@@ -5,6 +5,7 @@ import { ProfileForm } from "@/components/profile-form";
 import type { CompanyDocument } from "./company-documents";
 import { CompanyDocuments } from "./company-documents";
 import { createClient } from "@/lib/supabase/server";
+import { getSessionUser } from "@/lib/supabase/session";
 import { parseCompanySize } from "@/lib/company-lookup";
 import { isOpportunityCategory } from "@/lib/opportunities";
 import type { UserKind, UserProfile } from "@/lib/types";
@@ -14,29 +15,29 @@ export const dynamic = "force-dynamic";
 
 export default async function CompanyPage() {
   const supabase = await createClient();
-  const { data: authData, error: authError } = await supabase.auth.getUser();
-  if (authError || !authData.user) redirect("/login");
+  const user = await getSessionUser(supabase);
+  if (!user) redirect("/login");
 
   const [profileResult, documentsResult, analysesResult, linksResult] =
     await Promise.all([
     supabase
       .from("profiles")
       .select("id, full_name, user_kind, cnpj, company_size, categories, keywords, products_services, embedding_model, states, email_alerts")
-      .eq("id", authData.user.id)
+      .eq("id", user.id)
       .maybeSingle(),
     supabase
       .from("documents")
       .select("id, user_id, opportunity_id, name, document_type, expires_at, storage_path, created_at")
-      .eq("user_id", authData.user.id)
+      .eq("user_id", user.id)
       .order("created_at", { ascending: false }),
     supabase
       .from("document_analyses")
       .select("document_id, opportunity_id")
-      .eq("user_id", authData.user.id),
+      .eq("user_id", user.id),
     supabase
       .from("document_opportunities")
       .select("document_id, opportunity_id, requirement, added_by")
-      .eq("user_id", authData.user.id),
+      .eq("user_id", user.id),
   ]);
   if (profileResult.error || !profileResult.data) {
     throw new Error("Não foi possível carregar os dados da empresa.");
@@ -157,7 +158,7 @@ export default async function CompanyPage() {
           peneir.IA
         </Link>
         <div className="top-actions">
-          <span className="user-chip">{authData.user.email}</span>
+          <span className="user-chip">{user.email}</span>
           <Link className="button button-secondary button-small" href="/dashboard">
             Oportunidades
           </Link>

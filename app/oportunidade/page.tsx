@@ -2,14 +2,16 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { signOutAction } from "@/app/auth/actions";
 import { OpportunityDetail } from "@/components/opportunity-detail";
-import { linkColumns, type OpportunityDocumentReport } from "@/lib/document-report";
+import { linkColumns } from "@/lib/document-report";
 import {
   computeReportSignature,
   getOpportunityDocumentReport,
+  toPublicReport,
 } from "@/lib/document-report-ai";
 import { getOpportunityEdital, withEditalRequirements } from "@/lib/edital-store";
 import { getOpportunityById } from "@/lib/opportunity-store";
 import { createClient } from "@/lib/supabase/server";
+import { getSessionUser } from "@/lib/supabase/session";
 import type {
   AnalysisResult,
   UserDocument,
@@ -29,8 +31,8 @@ export default async function OpportunityPage({
   if (!opportunityId) notFound();
 
   const supabase = await createClient();
-  const { data: authData, error: authError } = await supabase.auth.getUser();
-  if (authError || !authData.user) redirect("/login");
+  const user = await getSessionUser(supabase);
+  if (!user) redirect("/login");
 
   const [
     baseOpportunity,
@@ -48,25 +50,25 @@ export default async function OpportunityPage({
       supabase
         .from("profiles")
         .select("user_kind, ai_consent_at")
-        .eq("id", authData.user.id)
+        .eq("id", user.id)
         .maybeSingle(),
       supabase
         .from("documents")
         .select("id, user_id, opportunity_id, name, document_type, expires_at, storage_path, created_at")
-        .eq("user_id", authData.user.id)
+        .eq("user_id", user.id)
         .order("created_at", { ascending: false }),
       supabase
         .from("document_analyses")
         .select("document_id, opportunity_id, result")
-        .eq("user_id", authData.user.id)
+        .eq("user_id", user.id)
         .eq("opportunity_id", opportunityId),
       supabase
         .from("document_opportunities")
         .select(linkColumns)
-        .eq("user_id", authData.user.id)
+        .eq("user_id", user.id)
         .eq("opportunity_id", opportunityId),
       // Sem a migração 0016, a página segue sem o relatório de documentos.
-      getOpportunityDocumentReport(supabase, authData.user.id, opportunityId).catch(
+      getOpportunityDocumentReport(supabase, user.id, opportunityId).catch(
         () => null,
       ),
     ]);
@@ -92,12 +94,7 @@ export default async function OpportunityPage({
     document_id: analysis.document_id,
     result: analysis.result as AnalysisResult,
   }));
-  const report: OpportunityDocumentReport | null = storedReport && {
-    status: storedReport.status,
-    result: storedReport.result,
-    error: storedReport.error,
-    updatedAt: storedReport.updatedAt,
-  };
+  const report = toPublicReport(storedReport);
   // O relatório fica desatualizado quando o edital é relido ou os documentos mudam.
   const reportIsStale = Boolean(
     storedReport &&
@@ -114,7 +111,7 @@ export default async function OpportunityPage({
           peneir.IA
         </Link>
         <div className="top-actions">
-          <span className="user-chip">{authData.user.email}</span>
+          <span className="user-chip">{user.email}</span>
           {profileResult.data.user_kind === "empresa" && (
             <Link className="button button-secondary button-small" href="/empresa">
               Minha empresa

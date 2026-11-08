@@ -1,37 +1,21 @@
 import { after, NextResponse, type NextRequest } from "next/server";
 import {
-  applyReportLinks,
   computeReportSignature,
-  generateDocumentReport,
   getOpportunityDocumentReport,
-  getReportRequirements,
   reportSourceDocumentColumns,
+  toPublicReport,
 } from "@/lib/document-report-ai";
-import { linkColumns, type OpportunityDocumentReport } from "@/lib/document-report";
+import { linkColumns } from "@/lib/document-report";
+import { runClaimedDocumentReport } from "@/lib/document-report-run";
 import { getOpportunityEdital } from "@/lib/edital-store";
-import { getChatModel } from "@/lib/config";
 import { isChatModelConfigured } from "@/lib/llm";
 import { getOpportunityById } from "@/lib/opportunity-store";
-import { sendOpportunityReportEmail } from "@/lib/report-email-send";
-import type { Json } from "@/lib/supabase/database.types";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 /** Extração de textos pendentes e comparação de vários documentos pela IA. */
 export const maxDuration = 300;
-
-function publicReport(
-  report: Awaited<ReturnType<typeof getOpportunityDocumentReport>>,
-): OpportunityDocumentReport | null {
-  if (!report) return null;
-  return {
-    status: report.status,
-    result: report.result,
-    error: report.error,
-    updatedAt: report.updatedAt,
-  };
-}
 
 /** Relatório atual (usado para acompanhar uma geração em andamento). */
 export async function GET(request: NextRequest) {
@@ -54,7 +38,7 @@ export async function GET(request: NextRequest) {
         .eq("opportunity_id", opportunityId),
     ]);
     if (links.error) throw links.error;
-    return NextResponse.json({ report: publicReport(report), links: links.data });
+    return NextResponse.json({ report: toPublicReport(report), links: links.data });
   } catch {
     return NextResponse.json(
       { error: "Não foi possível consultar o relatório. Confira se a migração 0016 foi executada." },
@@ -67,7 +51,9 @@ export async function GET(request: NextRequest) {
  * Compara todos os documentos do arquivo da empresa com as exigências do
  * edital e vincula automaticamente os que se encaixam total ou parcialmente.
  * Se o relatório já estiver atualizado, devolve o existente sem chamar a IA,
- * a menos que `force` seja true.
+ * a menos que `force` seja true. Com `background: true`, responde logo após a
+ * reserva e gera o relatório depois da resposta (usado ao fim da leitura do
+ * edital, quando a página pode já ter sido fechada).
  */
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
@@ -79,6 +65,7 @@ export async function POST(request: NextRequest) {
 
   let opportunityId = "";
   let force = false;
+  let background = false;
   try {
     const body: unknown = await request.json();
     if (typeof body === "object" && body !== null) {
@@ -86,6 +73,7 @@ export async function POST(request: NextRequest) {
         opportunityId = body.opportunityId;
       }
       force = "force" in body && body.force === true;
+      background = "background" in body && body.background === true;
     }
   } catch {
     // Tratado abaixo.
@@ -163,55 +151,35 @@ export async function POST(request: NextRequest) {
       .eq("user_id", userId)
       .eq("opportunity_id", opportunityId);
     return NextResponse.json(
-      { report: publicReport(current), links: links ?? [] },
+      { report: toPublicReport(current), links: links ?? [] },
       { status: current?.status === "processing" ? 202 : 200 },
     );
   }
 
-  const save = async (
-    values: { status: "ready" | "failed"; result?: Json | null; error?: string | null },
-  ) => {
-    const { error } = await supabase
-      .from("opportunity_document_reports")
-      .update({ ...values, model: getChatModel(), updated_at: new Date().toISOString() })
-      .eq("user_id", userId)
-      .eq("opportunity_id", opportunityId);
-    if (error) throw error;
-  };
-
-  try {
-    const report = await generateDocumentReport({
-      supabase,
-      userId,
-      opportunity,
-      edital,
-      documents,
-    });
-    const links = await applyReportLinks(supabase, userId, opportunityId, report);
-    await save({ status: "ready", result: report as unknown as Json, error: null });
-    // Relatório da vaga por e-mail, depois da resposta para não atrasá-la.
-    const user = authData.user;
-    after(() =>
-      sendOpportunityReportEmail({ supabase, user, opportunityId, trigger: "document_report" }),
+  const user = authData.user;
+  if (background) {
+    after(() => runClaimedDocumentReport({ supabase, user, opportunity, edital, documents }));
+    const current = await getOpportunityDocumentReport(supabase, userId, opportunityId).catch(
+      () => null,
     );
-    const current = await getOpportunityDocumentReport(supabase, userId, opportunityId);
-    return NextResponse.json({ report: publicReport(current), links });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error("Document report failed.", {
-      userId,
-      opportunityId,
-      requirements: getReportRequirements(edital).length,
-      documents: documents.length,
-      error: message,
-    });
-    await save({
-      status: "failed",
-      error: "A IA não conseguiu concluir o relatório. Tente novamente.",
-    }).catch(() => undefined);
+    return NextResponse.json({ report: toPublicReport(current) }, { status: 202 });
+  }
+
+  // O e-mail sai depois da resposta, para não atrasá-la.
+  const outcome = await runClaimedDocumentReport({
+    supabase,
+    user,
+    opportunity,
+    edital,
+    documents,
+    deferEmail: (task) => after(task),
+  });
+  if (!outcome.ok) {
     return NextResponse.json(
       { error: "Não foi possível gerar o relatório dos documentos. Tente novamente." },
       { status: 502 },
     );
   }
+  const current = await getOpportunityDocumentReport(supabase, userId, opportunityId);
+  return NextResponse.json({ report: toPublicReport(current), links: outcome.links });
 }

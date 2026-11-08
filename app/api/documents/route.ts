@@ -1,8 +1,9 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { after, NextResponse, type NextRequest } from "next/server";
 import { linkColumns } from "@/lib/document-report";
 import {
   extractDocumentText,
   generateDocumentType,
+  storeUploadedDocumentText,
 } from "@/lib/document-report-ai";
 import { getAcceptedRequirements } from "@/lib/edital-store";
 import { createClient } from "@/lib/supabase/server";
@@ -10,6 +11,10 @@ import type {
   UserDocument,
   UserDocumentOpportunityLink,
 } from "@/lib/types";
+
+export const runtime = "nodejs";
+/** Inclui a extração do texto do PDF e, sem tipo informado, a identificação do tipo pela IA. */
+export const maxDuration = 120;
 
 const maxFileSize = 4 * 1024 * 1024;
 const documentColumns =
@@ -102,12 +107,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "O arquivo enviado não parece ser um PDF válido." }, { status: 400 });
   }
 
-  // Guardado para a IA comparar o documento com os editais sem baixá-lo de novo.
-  const extractedText = await extractDocumentText(bytes);
+  // Sem tipo informado (arquivo da empresa), a IA identifica o tipo pelo texto,
+  // então a extração é feita agora. Nos demais casos ela roda depois da
+  // resposta, para não atrasar o envio.
+  const needsTypeFromAi = !opportunityId && !documentType;
+  const extractedText = needsTypeFromAi ? await extractDocumentText(bytes) : undefined;
   let typeWarning: string | undefined;
-  if (!opportunityId && !documentType) {
+  if (needsTypeFromAi) {
     try {
-      documentType = await generateDocumentType(file.name, extractedText);
+      documentType = await generateDocumentType(file.name, extractedText ?? "");
       if (documentType === "Documento não identificado") {
         typeWarning =
           "A IA não conseguiu identificar o tipo deste documento. Revise em “Editar dados”.";
@@ -153,8 +161,10 @@ export async function POST(request: NextRequest) {
         document_type: documentType,
         expires_at: expiresAt || null,
         storage_path: storagePath,
-        extracted_text: extractedText,
-        text_extracted_at: new Date().toISOString(),
+        // Texto já extraído para identificar o tipo: grava junto (falha = null, não grava).
+        ...(typeof extractedText === "string"
+          ? { extracted_text: extractedText, text_extracted_at: new Date().toISOString() }
+          : {}),
       })
       .select(documentColumns)
       .single();
@@ -186,6 +196,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       { error: "O arquivo foi recebido, mas não foi possível registrar seus dados." },
       { status: 502 },
+    );
+  }
+
+  // Texto do PDF para a IA, extraído depois da resposta para não atrasar o
+  // envio. Se falhar, o relatório extrai de novo quando precisar.
+  const uploadedDocumentId = document.id;
+  if (typeof extractedText !== "string") {
+    after(() =>
+      storeUploadedDocumentText(supabase, authData.user.id, uploadedDocumentId, bytes),
     );
   }
 

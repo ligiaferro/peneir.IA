@@ -21,7 +21,9 @@ export async function middleware(request: NextRequest) {
     },
   });
 
-  await supabase.auth.getUser();
+  // Renova a sessão quando o token expira e valida a assinatura localmente
+  // (chaves assimétricas em cache), sem uma ida ao Supabase Auth por página.
+  await supabase.auth.getClaims();
   return response;
 }
 
