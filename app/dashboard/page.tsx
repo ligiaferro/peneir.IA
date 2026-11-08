@@ -20,6 +20,8 @@ import {
 import { getOpportunityEditais, withEditalRequirements } from "@/lib/edital-store";
 import { getStaleStates, refreshLiveOpportunities } from "@/lib/live-refresh";
 import { searchMatchingOpportunities } from "@/lib/opportunity-store";
+import { shouldAutomaticallyReadEdital } from "@/lib/edital-automation";
+import type { EditalStatus, OpportunityEdital } from "@/lib/edital-insights";
 import {
   hasStaleProfileEmbedding,
   refreshStaleProfileEmbeddings,
@@ -131,6 +133,8 @@ export default async function DashboardPage({
 
   let matches: Opportunity[];
   let totalMatches: number;
+  const editalStatuses = new Map<string, EditalStatus>();
+  let editalStatusUnavailable = false;
   try {
     const result = await searchMatchingOpportunities(supabase, profile.id, {
       categories: searchCategories,
@@ -145,10 +149,21 @@ export default async function DashboardPage({
     });
     totalMatches = result.total;
     // Os requisitos lidos do edital substituem a lista genérica nos cards.
-    const editais = await getOpportunityEditais(
-      supabase,
-      result.opportunities.map(({ id }) => id),
-    ).catch(() => new Map());
+    let editais = new Map<string, OpportunityEdital>();
+    try {
+      editais = await getOpportunityEditais(
+        supabase,
+        result.opportunities.map(({ id }) => id),
+      );
+      for (const [id, edital] of editais) {
+        editalStatuses.set(id, edital.status);
+      }
+    } catch (error) {
+      editalStatusUnavailable = true;
+      console.error("Could not load edital status for dashboard cards.", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
     matches = result.opportunities.map((opportunity) =>
       withEditalRequirements(opportunity, editais.get(opportunity.id) ?? null),
     );
@@ -163,7 +178,6 @@ export default async function DashboardPage({
   }
   const totalPages = Math.max(1, Math.ceil(totalMatches / dashboardPageSize));
   const filtered = hasActiveFilters(filters);
-
   const priorDocuments: SuggestibleDocument[] = [];
   for (let offset = 0; ; offset += 1000) {
     const { data, error } = await supabase
@@ -374,6 +388,11 @@ export default async function DashboardPage({
               usesProfileStates={profile.states.length > 0}
             />
           )}
+          {editalStatusUnavailable && (
+            <p className="notice notice-error">
+              Não foi possível consultar o estado da leitura dos editais. A leitura
+              automática dos cards foi pausada; confira a migração 0008.
+            </p>
           {profile.embedding_model && authData.user.email && (
             <SendAlertButton email={authData.user.email} />
           )}
@@ -408,6 +427,12 @@ export default async function DashboardPage({
                           ?.has(requirement) &&
                         compatibleRequirements.has(requirement),
                     )}
+                    initialEditalStatus={editalStatuses.get(opportunity.id) ?? null}
+                    autoReadEligible={
+                      !editalStatusUnavailable &&
+                      opportunity.matchScore !== undefined &&
+                      shouldAutomaticallyReadEdital(opportunity.matchScore)
+                    }
                   />
                 );
               })}

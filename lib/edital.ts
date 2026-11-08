@@ -196,6 +196,8 @@ export async function processOpportunityEdital(
   opportunity: Pick<Opportunity, "id" | "title" | "organization" | "summary">,
 ) {
   const userAgent = `peneir.IA/0.1 (+${process.env.NEXT_PUBLIC_APP_URL ?? "https://peneir.ia"})`;
+  const startedAt = Date.now();
+  let stage = "preparando a leitura";
   const save = async (values: Database["public"]["Tables"]["opportunity_editais"]["Update"]) => {
     const now = new Date().toISOString();
     const { error } = await supabase
@@ -207,19 +209,23 @@ export async function processOpportunityEdital(
 
   try {
     const key = parsePncpOpportunityId(opportunity.id);
+    stage = "listando arquivos no PNCP";
     const pncpFiles = key ? await listPncpFiles(key, { userAgent }) : [];
     if (pncpFiles.length === 0) {
       await save({ status: "no_files", files: [], insights: null, requirements: [] });
       return;
     }
 
+    stage = "baixando e extraindo arquivos do edital";
     const { files, text } = await collectEditalText(pncpFiles, userAgent);
     if (!text) {
       await save({ status: "no_text", files, insights: null, requirements: [], text_length: 0 });
       return;
     }
 
+    stage = "analisando o texto com IA";
     const insights = await extractEditalInsights(text, opportunity);
+    stage = "salvando resultado";
     await save({
       status: "ready",
       files,
@@ -231,7 +237,12 @@ export async function processOpportunityEdital(
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.error("Edital processing failed.", { opportunityId: opportunity.id, error: message });
+    console.error("Edital processing failed.", {
+      opportunityId: opportunity.id,
+      stage,
+      elapsedMs: Date.now() - startedAt,
+      error: message,
+    });
     await save({ status: "failed", error: message.slice(0, 500) });
   }
 }

@@ -53,11 +53,18 @@ export async function POST(request: NextRequest) {
 
   let opportunityId = "";
   let check = false;
+  let force = false;
   try {
     const body: unknown = await request.json();
     if (typeof body === "object" && body !== null && "opportunityId" in body) {
       opportunityId = String(body.opportunityId);
       check = "check" in body && body.check === true;
+      if ("force" in body) {
+        if (typeof body.force !== "boolean") {
+          return NextResponse.json({ error: "Opção de releitura inválida." }, { status: 400 });
+        }
+        force = body.force;
+      }
     }
   } catch {
     // Tratado abaixo.
@@ -86,9 +93,13 @@ export async function POST(request: NextRequest) {
   if (check) {
     return checkForUpdatedFiles(admin, supabase, opportunity);
   }
-  const { data: claimed, error: claimError } = await admin.rpc("claim_edital_processing", {
-    p_opportunity_id: opportunity.id,
-  });
+  const { data: claimed, error: claimError } = force
+    ? await admin.rpc("claim_edital_reread", {
+        p_opportunity_id: opportunity.id,
+      })
+    :     await admin.rpc("claim_edital_processing", {
+      p_opportunity_id: opportunity.id,
+    });
   if (claimError) {
     console.error("Could not claim edital processing.", { error: claimError.message });
     return NextResponse.json(
@@ -99,6 +110,12 @@ export async function POST(request: NextRequest) {
   if (claimed) after(() => processOpportunityEdital(admin, opportunity));
 
   const edital = await getOpportunityEdital(supabase, opportunity.id).catch(() => null);
+  if (force && !claimed && edital?.status !== "processing") {
+    return NextResponse.json(
+      { error: "Só é possível refazer uma leitura do edital já concluída." },
+      { status: 409 },
+    );
+  }
   return NextResponse.json({ edital }, { status: 202 });
 }
 

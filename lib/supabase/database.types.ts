@@ -357,6 +357,9 @@ export type Database = {
       prune_old_opportunities: {
         Args: { p_cutoff: string };
         Returns: number;
+      claim_edital_reread: {
+        Args: { p_opportunity_id: string };
+        Returns: boolean;
       };
       claim_opportunity_notification: {
         Args: {

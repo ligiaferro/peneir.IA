@@ -661,6 +661,32 @@ h3 {
   line-height: 1.6;
 }
 
+.card-edital-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border: 1px solid rgba(27, 113, 89, 0.14);
+  border-radius: 12px;
+  background: var(--mint);
+  color: var(--green-dark);
+}
+
+.card-edital-progress > span:last-child {
+  display: grid;
+  gap: 2px;
+}
+
+.card-edital-progress strong {
+  font-size: 12px;
+}
+
+.card-edital-progress small {
+  color: #476058;
+  font-size: 10px;
+}
+
 .requirements {
   margin: 0 0 15px;
   padding-left: 17px;
@@ -1159,6 +1185,12 @@ h3 {
   animation: edital-spin 0.9s linear infinite;
 }
 
+.edital-card-spinner {
+  width: 18px;
+  height: 18px;
+  border-width: 2px;
+}
+
 @keyframes edital-spin {
   to {
     transform: rotate(360deg);
@@ -1168,6 +1200,10 @@ h3 {
 @media (prefers-reduced-motion: reduce) {
   .edital-spinner {
     animation-duration: 3s;
+  }
+
+  .edital-card-spinner {
+    animation: none;
   }
 }
 

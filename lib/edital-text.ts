@@ -6,6 +6,7 @@
 
 const chunkSize = 2_000;
 const headLength = 24_000;
+const defaultExcerptBudget = 80_000;
 
 const keywords = [
   "habilitação",
@@ -51,7 +52,7 @@ function scoreChunk(chunk: string) {
   return score;
 }
 
-export function selectEditalExcerpt(text: string, budget = 150_000) {
+export function selectEditalExcerpt(text: string, budget = defaultExcerptBudget) {
   if (text.length <= budget) return text;
 
   const chunks: string[] = [];

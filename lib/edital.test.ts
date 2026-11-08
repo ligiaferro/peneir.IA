@@ -55,6 +55,11 @@ describe("selectEditalExcerpt", () => {
     expect(excerpt).toContain("DA HABILITAÇÃO");
     expect(excerpt).toContain("[...]");
   });
+
+  it("limits the default excerpt sent to the AI", () => {
+    const text = "Habilitação e certidão. ".repeat(20_000);
+    expect(selectEditalExcerpt(text).length).toBeLessThanOrEqual(80_400);
+  });
 });
 
 describe("withEditalRequirements", () => {

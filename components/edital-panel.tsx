@@ -41,9 +41,7 @@ export function EditalPanel({
   const router = useRouter();
   const [edital, setEdital] = useState(initialEdital);
   const [requestError, setRequestError] = useState("");
-  const [working, setWorking] = useState(
-    initialEdital === null || initialEdital.status === "processing",
-  );
+  const [working, setWorking] = useState(initialEdital?.status === "processing");
   const [messageIndex, setMessageIndex] = useState(0);
   const started = useRef(false);
 
@@ -78,7 +76,7 @@ export function EditalPanel({
     setRequestError("A leitura está demorando mais que o normal. Recarregue a página em instantes.");
   }, [finish, opportunityId]);
 
-  const start = useCallback(async () => {
+  const start = useCallback(async (force = false) => {
     setWorking(true);
     setRequestError("");
     setMessageIndex(0);
@@ -86,7 +84,7 @@ export function EditalPanel({
       const response = await fetch("/api/edital", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ opportunityId }),
+        body: JSON.stringify({ opportunityId, force }),
       });
       const body = (await response.json()) as EditalResponse;
       if (!response.ok && response.status !== 202) {
@@ -127,12 +125,11 @@ export function EditalPanel({
   useEffect(() => {
     if (started.current) return;
     started.current = true;
-    if (initialEdital === null) void start();
-    else if (initialEdital.status === "processing") void poll();
-    else if (initialEdital.status === "ready" || initialEdital.status === "no_text") {
+    if (initialEdital?.status === "processing") void poll();
+    else if (initialEdital?.status === "ready" || initialEdital?.status === "no_text") {
       void checkForUpdates();
     }
-  }, [checkForUpdates, initialEdital, poll, start]);
+  }, [checkForUpdates, initialEdital?.status, poll]);
 
   useEffect(() => {
     if (!working) return;
@@ -161,6 +158,15 @@ export function EditalPanel({
         {edital?.status === "ready" && edital.processedAt && (
           <span className="badge">Lido por IA em {formatDate(edital.processedAt)}</span>
         )}
+        {edital?.status === "ready" && !working && (
+          <button
+            className="button button-secondary button-small"
+            type="button"
+            onClick={() => void start(true)}
+          >
+            Refazer leitura
+          </button>
+        )}
       </div>
 
       {working && (
@@ -183,7 +189,7 @@ export function EditalPanel({
       {!working && requestError && (
         <div className="edital-message">
           <p className="notice notice-error">{requestError}</p>
-          <button className="button button-small" type="button" onClick={() => void start()}>
+          <button className="button button-small" type="button" onClick={() => void start(edital?.status === "ready")}>
             Tentar novamente
           </button>
         </div>
@@ -192,8 +198,8 @@ export function EditalPanel({
       {!working && !requestError && edital?.status === "failed" && (
         <div className="edital-message">
           <p className="notice notice-error">
-            Não foi possível ler o edital desta vez. A lista de documentos abaixo
-            continua sendo a orientação geral.
+            Não foi possível ler o edital desta vez. Tente novamente ou confira
+            os arquivos na fonte oficial.
           </p>
           <button className="button button-small" type="button" onClick={() => void start()}>
             Tentar novamente
@@ -218,11 +224,32 @@ export function EditalPanel({
       )}
 
       {!working && !requestError && edital?.status === "no_text" && (
-        <p className="notice">
-          Os arquivos do edital não têm texto selecionável (provavelmente foram
-          digitalizados como imagem ou estão em formato não suportado, como RAR).
-          Consulte o edital na fonte oficial.
-        </p>
+        <div className="edital-message">
+          <p className="notice">
+            Os arquivos do edital não têm texto selecionável (provavelmente foram
+            digitalizados como imagem ou estão em formato não suportado, como RAR).
+            Consulte o edital na fonte oficial.
+          </p>
+          <button
+            className="button button-secondary button-small"
+            type="button"
+            onClick={() => void start()}
+          >
+            Tentar novamente
+          </button>
+        </div>
+      )}
+
+      {!working && !requestError && edital === null && (
+        <div className="edital-message">
+          <p className="notice">
+            A leitura não começou. Inicie quando quiser para extrair os requisitos
+            e condições do edital.
+          </p>
+          <button className="button button-small" type="button" onClick={() => void start()}>
+            Ler edital com IA
+          </button>
+        </div>
       )}
 
       {!working && insights && (
