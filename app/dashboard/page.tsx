@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { OpportunityCard } from "@/components/opportunity-card";
 import { ProfileForm } from "@/components/profile-form";
 import { signOutAction } from "@/app/auth/actions";
@@ -17,14 +18,11 @@ import {
 import { createServiceClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type {
-  AnalysisResult,
   Opportunity,
   OpportunityCategory,
-  UserDocument,
   UserKind,
   UserProfile,
 } from "@/lib/types";
-import { DashboardDocuments } from "./dashboard-documents";
 
 export const dynamic = "force-dynamic";
 
@@ -33,22 +31,11 @@ export default async function DashboardPage() {
   const { data: authData, error: authError } = await supabase.auth.getUser();
   if (authError || !authData.user) redirect("/login");
 
-  const [profileResult, documentsResult, analysesResult] = await Promise.all([
-    supabase
+  const profileResult = await supabase
       .from("profiles")
       .select("id, full_name, user_kind, categories, keywords, products_services, embedding_model, email_alerts")
       .eq("id", authData.user.id)
-      .maybeSingle(),
-    supabase
-      .from("documents")
-      .select("id, user_id, name, document_type, expires_at, storage_path, created_at")
-      .eq("user_id", authData.user.id)
-      .order("created_at", { ascending: false }),
-    supabase
-      .from("document_analyses")
-      .select("document_id, opportunity_id, result")
-      .eq("user_id", authData.user.id),
-  ]);
+      .maybeSingle();
   if (profileResult.error) {
     throw new Error(`Não foi possível carregar seu perfil: ${profileResult.error.message}`);
   }
@@ -56,12 +43,6 @@ export default async function DashboardPage() {
     throw new Error(
       "Não foi possível carregar seu perfil. Confira se a migração do Supabase foi executada.",
     );
-  }
-  if (documentsResult.error) {
-    throw new Error(`Não foi possível carregar seus documentos: ${documentsResult.error.message}`);
-  }
-  if (analysesResult.error) {
-    throw new Error(`Não foi possível carregar suas análises: ${analysesResult.error.message}`);
   }
 
   const profile: UserProfile = {
@@ -74,12 +55,9 @@ export default async function DashboardPage() {
     embedding_model: profileResult.data.embedding_model,
     email_alerts: profileResult.data.email_alerts,
   };
-  const documents = documentsResult.data as UserDocument[];
-  const analysisData = analysesResult.data;
   const hasSearch =
     profile.categories.length > 0 ||
     profile.keywords.some((keyword) => keyword.trim().length > 0);
-  const hasDocuments = documents.length > 0;
   const searchCategories = getSearchCategories(profile);
   const states = [
     ...new Set(
@@ -224,6 +202,11 @@ export default async function DashboardPage() {
         </a>
         <div className="top-actions">
           <span className="user-chip">{authData.user.email}</span>
+          {profile.user_kind === "empresa" && (
+            <Link className="button button-secondary button-small" href="/empresa">
+              Minha empresa
+            </Link>
+          )}
           <form action={signOutAction}>
             <button
               className="button button-secondary button-small"
@@ -256,20 +239,16 @@ export default async function DashboardPage() {
               className="button"
               href={
                 !hasSearch
-                  ? "#perfil"
+                  ? profile.user_kind === "empresa" ? "/empresa" : "#perfil"
                   : !profile.embedding_model
-                    ? "#perfil"
-                  : !hasDocuments
-                    ? "#documentos"
+                    ? profile.user_kind === "empresa" ? "/empresa" : "#perfil"
                     : "#oportunidades"
               }
             >
               {!hasSearch
-                ? "Personalizar minha busca ↓"
+                ? profile.user_kind === "empresa" ? "Completar dados da empresa →" : "Personalizar minha busca ↓"
                 : !profile.embedding_model
-                  ? "Descrever minha atividade ↓"
-                : !hasDocuments
-                  ? "Adicionar documentos ↓"
+                  ? profile.user_kind === "empresa" ? "Completar dados da empresa →" : "Descrever minha atividade ↓"
                   : `Ver ${matches.length} oportunidades para mim ↓`}
             </a>
           </div>
@@ -297,41 +276,32 @@ export default async function DashboardPage() {
         <section className="section" id="perfil">
           <div className="section-heading">
             <div>
-              <h2>Seu perfil e documentos</h2>
-              <p>Personalize as buscas e organize seus arquivos com segurança.</p>
+              <h2>{profile.user_kind === "empresa" ? "Perfil da empresa" : "Seu perfil"}</h2>
+              <p>Personalize as oportunidades que fazem sentido para você.</p>
             </div>
           </div>
-          <div className="profile-layout">
+          {profile.user_kind === "empresa" ? (
+            <section className="panel">
+              <h3>{profile.full_name}</h3>
+              <p className="panel-description">
+                Gerencie os dados da empresa e os documentos enviados para cada oportunidade.
+              </p>
+              <Link className="button button-small" href="/empresa">
+                Acessar página da empresa
+              </Link>
+            </section>
+          ) : (
             <section className="panel">
               <h3>O que você está buscando?</h3>
               <p className="panel-description">
-                Empresas precisam descrever o que fornecem. Comparamos essa
-                descrição semanticamente com os objetos das licitações.
+                Personalize categorias e temas para encontrar oportunidades compatíveis.
               </p>
               <ProfileForm profile={profile} />
             </section>
-            {hasSearch && (
-              <section className="panel" id="documentos">
-                <h3>Meus documentos</h3>
-                <p className="panel-description">
-                  Com base no seu perfil, estas são algumas sugestões. Envie
-                  PDFs privados; o conteúdo só é enviado à OpenAI quando você
-                  solicita uma análise.
-                </p>
-                <DashboardDocuments
-                  key={documents
-                    .map((document) => `${document.id}:${document.expires_at}`)
-                    .join("|")}
-                  initialDocuments={documents}
-                  categories={profile.categories}
-                  keywords={profile.keywords}
-                />
-              </section>
-            )}
-          </div>
+          )}
         </section>
 
-        {hasSearch && hasDocuments && (
+        {hasSearch && (
         <section className="section" id="oportunidades">
           <div className="section-heading">
             <div>
@@ -374,18 +344,10 @@ export default async function DashboardPage() {
           ) : (
             <div className="opportunity-grid">
               {matches.map((opportunity) => {
-                const opportunityAnalyses = analysisData
-                  .filter((analysis) => analysis.opportunity_id === opportunity.id)
-                  .map((analysis) => ({
-                    document_id: analysis.document_id,
-                    result: analysis.result as AnalysisResult,
-                  }));
                 return (
                   <OpportunityCard
                     key={opportunity.id}
                     opportunity={opportunity}
-                    documents={documents}
-                    initialAnalyses={opportunityAnalyses}
                   />
                 );
               })}

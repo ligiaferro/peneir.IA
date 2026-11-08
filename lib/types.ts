@@ -44,6 +44,7 @@ export type UserProfile = {
 export type UserDocument = {
   id: string;
   user_id: string;
+  opportunity_id: string | null;
   name: string;
   document_type: string;
   expires_at: string | null;

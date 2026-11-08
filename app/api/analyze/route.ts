@@ -117,7 +117,7 @@ export async function POST(request: NextRequest) {
       getOpportunityById(supabase, opportunityId),
       supabase
         .from("documents")
-        .select("id, user_id, name, document_type, expires_at, storage_path")
+        .select("id, user_id, opportunity_id, name, document_type, expires_at, storage_path")
         .eq("id", documentId)
         .eq("user_id", authData.user.id)
         .maybeSingle(),
@@ -133,6 +133,12 @@ export async function POST(request: NextRequest) {
   }
   if (!document) {
     return NextResponse.json({ error: "Documento não encontrado." }, { status: 404 });
+  }
+  if (document.opportunity_id && document.opportunity_id !== opportunity.id) {
+    return NextResponse.json(
+      { error: "Este documento foi enviado para outra oportunidade." },
+      { status: 403 },
+    );
   }
 
   const apiKey = process.env.OPENAI_API_KEY;

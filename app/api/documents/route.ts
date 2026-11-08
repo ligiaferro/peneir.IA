@@ -26,11 +26,26 @@ export async function POST(request: NextRequest) {
   const file = formData.get("file");
   const documentType = String(formData.get("document_type") ?? "").trim();
   const expiresAt = String(formData.get("expires_at") ?? "").trim();
-  if (!(file instanceof File) || !documentType) {
+  const opportunityId = String(formData.get("opportunity_id") ?? "").trim();
+  if (!(file instanceof File) || !documentType || !opportunityId) {
     return NextResponse.json(
-      { error: "Selecione um PDF e informe o tipo de documento." },
+      { error: "Selecione uma oportunidade, um PDF e informe o tipo de documento." },
       { status: 400 },
     );
+  }
+  const { data: opportunity, error: opportunityError } = await supabase
+    .from("opportunities")
+    .select("id")
+    .eq("id", opportunityId)
+    .maybeSingle();
+  if (opportunityError) {
+    return NextResponse.json(
+      { error: "Não foi possível validar a oportunidade selecionada." },
+      { status: 502 },
+    );
+  }
+  if (!opportunity) {
+    return NextResponse.json({ error: "Oportunidade não encontrada." }, { status: 404 });
   }
   if (file.type !== "application/pdf" || !file.name.toLowerCase().endsWith(".pdf")) {
     return NextResponse.json({ error: "Envie somente arquivos PDF." }, { status: 400 });
@@ -41,7 +56,7 @@ export async function POST(request: NextRequest) {
       { status: 400 },
     );
   }
-  if (documentType.length > 60) {
+  if (documentType.length > 500) {
     return NextResponse.json({ error: "Tipo de documento muito longo." }, { status: 400 });
   }
   if (expiresAt && !isCalendarDate(expiresAt)) {
@@ -74,13 +89,14 @@ export async function POST(request: NextRequest) {
       .from("documents")
       .insert({
         user_id: authData.user.id,
+        opportunity_id: opportunityId,
         name: safeName,
         document_type: documentType,
         expires_at: expiresAt || null,
         storage_path: storagePath,
       })
       .select(
-        "id, user_id, name, document_type, expires_at, storage_path, created_at",
+        "id, user_id, opportunity_id, name, document_type, expires_at, storage_path, created_at",
       )
       .single();
     if (error) throw error;
@@ -115,6 +131,60 @@ export async function POST(request: NextRequest) {
   }
 
   return NextResponse.json({ document }, { status: 201 });
+}
+
+export async function PATCH(request: NextRequest) {
+  const supabase = await createClient();
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData.user) {
+    return NextResponse.json({ error: "Entre para editar documentos." }, { status: 401 });
+  }
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Envie um pedido JSON válido." }, { status: 400 });
+  }
+  if (
+    typeof body !== "object" ||
+    body === null ||
+    !("documentId" in body) ||
+    typeof body.documentId !== "string" ||
+    !("documentType" in body) ||
+    typeof body.documentType !== "string" ||
+    !("expiresAt" in body) ||
+    !(typeof body.expiresAt === "string" || body.expiresAt === null)
+  ) {
+    return NextResponse.json({ error: "Dados do documento inválidos." }, { status: 400 });
+  }
+
+  const documentType = body.documentType.trim();
+  const expiresAt = body.expiresAt?.trim() ?? "";
+  if (!documentType || documentType.length > 500) {
+    return NextResponse.json(
+      { error: "Informe um tipo de documento com até 500 caracteres." },
+      { status: 400 },
+    );
+  }
+  if (expiresAt && !isCalendarDate(expiresAt)) {
+    return NextResponse.json({ error: "Informe uma data de validade válida." }, { status: 400 });
+  }
+
+  const { data: document, error } = await supabase
+    .from("documents")
+    .update({ document_type: documentType, expires_at: expiresAt || null })
+    .eq("id", body.documentId)
+    .eq("user_id", authData.user.id)
+    .select("id, user_id, opportunity_id, name, document_type, expires_at, storage_path, created_at")
+    .maybeSingle();
+  if (error) {
+    return NextResponse.json({ error: "Não foi possível atualizar o documento." }, { status: 502 });
+  }
+  if (!document) {
+    return NextResponse.json({ error: "Documento não encontrado." }, { status: 404 });
+  }
+  return NextResponse.json({ document });
 }
 
 export async function DELETE(request: NextRequest) {

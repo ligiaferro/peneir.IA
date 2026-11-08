@@ -13,7 +13,6 @@ export async function updateProfileAction(
   formData: FormData,
 ): Promise<ProfileState> {
   const fullName = String(formData.get("full_name") ?? "").trim();
-  const userKind = String(formData.get("user_kind") ?? "");
   const productsServices = String(formData.get("products_services") ?? "")
     .trim();
   const categories = formData
@@ -27,13 +26,8 @@ export async function updateProfileAction(
     .slice(0, 20);
   const emailAlerts = formData.get("email_alerts") === "on";
 
-  if (!fullName || !["empresa", "pessoa"].includes(userKind)) {
-    return { error: "Informe um nome e selecione o tipo de perfil." };
-  }
-  if (userKind === "empresa" && !productsServices) {
-    return {
-      error: "Descreva os produtos ou serviços que sua empresa fornece para encontrar licitações compatíveis.",
-    };
+  if (!fullName) {
+    return { error: "Informe um nome ou razão social." };
   }
   if (productsServices.length > 4000) {
     return { error: "A descrição pode ter no máximo 4.000 caracteres." };
@@ -53,7 +47,7 @@ export async function updateProfileAction(
 
   const { data: currentProfile, error: currentProfileError } = await supabase
     .from("profiles")
-    .select("products_services, keywords, embedding, embedding_model")
+    .select("user_kind, products_services, keywords, embedding, embedding_model")
     .eq("id", authData.user.id)
     .maybeSingle();
   if (currentProfileError || !currentProfile) {
@@ -62,6 +56,11 @@ export async function updateProfileAction(
       error: currentProfileError?.message ?? "Profile not found.",
     });
     return { error: "Não foi possível carregar seu perfil. Tente novamente." };
+  }
+  if (currentProfile.user_kind === "empresa" && !productsServices) {
+    return {
+      error: "Descreva os produtos ou serviços que sua empresa fornece para encontrar licitações compatíveis.",
+    };
   }
 
   const embeddingText = buildProfileEmbeddingText(productsServices, keywords);
@@ -107,7 +106,7 @@ export async function updateProfileAction(
     .from("profiles")
     .update({
       full_name: fullName,
-      user_kind: userKind as "empresa" | "pessoa",
+      user_kind: currentProfile.user_kind,
       categories,
       keywords,
       products_services: productsServices,

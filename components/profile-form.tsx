@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState } from "react";
 import { updateProfileAction, type ProfileState } from "@/app/actions";
 import { categoryLabels } from "@/lib/opportunities";
 import type { OpportunityCategory, UserProfile } from "@/lib/types";
@@ -11,7 +11,7 @@ const categories = Object.entries(categoryLabels) as [
 ][];
 
 export function ProfileForm({ profile }: { profile: UserProfile }) {
-  const [userKind, setUserKind] = useState(profile.user_kind);
+  const userKind = profile.user_kind;
   const [state, formAction, pending] = useActionState<ProfileState, FormData>(
     updateProfileAction,
     {},
@@ -29,18 +29,6 @@ export function ProfileForm({ profile }: { profile: UserProfile }) {
             autoComplete="name"
             required
           />
-        </div>
-        <div className="field">
-          <label htmlFor="user_kind">Meu perfil</label>
-          <select
-            id="user_kind"
-            name="user_kind"
-            value={userKind}
-            onChange={(event) => setUserKind(event.target.value as UserProfile["user_kind"])}
-          >
-            <option value="pessoa">Pessoa</option>
-            <option value="empresa">Empresa</option>
-          </select>
         </div>
       </div>
       <span className="field-label">Quais oportunidades quer acompanhar?</span>

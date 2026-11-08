@@ -6,8 +6,15 @@ import { signInAction, signUpAction, type AuthState } from "./actions";
 
 const initialState: AuthState = {};
 
-export function AuthForm({ callbackError }: { callbackError?: string }) {
-  const [isSignUp, setIsSignUp] = useState(false);
+export function AuthForm({
+  callbackError,
+  mode = "login",
+}: {
+  callbackError?: string;
+  mode?: "login" | "signup" | "company-signup";
+}) {
+  const companyRegistration = mode === "company-signup";
+  const [isSignUp, setIsSignUp] = useState(mode !== "login");
   const [signInState, signInFormAction, signInPending] = useActionState(
     signInAction,
     initialState,
@@ -26,17 +33,31 @@ export function AuthForm({ callbackError }: { callbackError?: string }) {
           <span className="brand-mark">p.</span>
           peneir.IA
         </Link>
-        <h1>{isSignUp ? "Encontre sua próxima oportunidade." : "Boas-vindas de volta."}</h1>
+        <h1>
+          {companyRegistration
+            ? "Cadastre sua empresa."
+            : isSignUp
+              ? "Encontre sua próxima oportunidade."
+              : "Boas-vindas de volta."}
+        </h1>
         <p>
-          Organize seu perfil e descubra oportunidades que combinam com seus
-          objetivos.
+          {companyRegistration
+            ? "Crie o acesso da empresa. Depois, complete os dados e acompanhe os documentos enviados para cada oportunidade."
+            : "Organize seu perfil e descubra oportunidades que combinam com seus objetivos."}
         </p>
         <form action={isSignUp ? signUpFormAction : signInFormAction}>
           {isSignUp && (
             <div className="field">
-              <label htmlFor="full_name">Nome</label>
+              <label htmlFor="full_name">{companyRegistration ? "Razão social ou nome da empresa" : "Nome"}</label>
               <input id="full_name" name="full_name" autoComplete="name" required />
             </div>
+          )}
+          {isSignUp && (
+            <input
+              type="hidden"
+              name="user_kind"
+              value={companyRegistration ? "empresa" : "pessoa"}
+            />
           )}
           <div className="field">
             <label htmlFor="email">E-mail</label>
@@ -68,15 +89,27 @@ export function AuthForm({ callbackError }: { callbackError?: string }) {
             {pending ? "Aguarde..." : isSignUp ? "Criar conta" : "Entrar"}
           </button>
         </form>
-        <p className="auth-switch">
-          {isSignUp ? "Já tem uma conta? " : "Ainda não tem uma conta? "}
-          <button
-            type="button"
-            onClick={() => setIsSignUp((current) => !current)}
-          >
-            {isSignUp ? "Entrar" : "Cadastre-se"}
-          </button>
-        </p>
+        {companyRegistration ? (
+          <p className="auth-switch">
+            Já tem uma conta? <Link href="/login">Entrar</Link>
+          </p>
+        ) : (
+          <p className="auth-switch">
+            {isSignUp ? "Já tem uma conta? " : "Ainda não tem uma conta? "}
+            <button
+              type="button"
+              onClick={() => setIsSignUp((current) => !current)}
+            >
+              {isSignUp ? "Entrar" : "Cadastre-se"}
+            </button>
+          </p>
+        )}
+        {!companyRegistration && (
+          <p className="auth-switch">
+            {isSignUp ? "É uma empresa? " : "Representa uma empresa? "}
+            <Link href="/cadastro-empresa">Cadastre sua empresa</Link>
+          </p>
+        )}
         <p className="fine-print">
           Seus documentos ficam privados. A análise com IA só acontece quando
           você solicitar.

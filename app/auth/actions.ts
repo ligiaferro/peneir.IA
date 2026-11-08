@@ -39,6 +39,8 @@ export async function signUpAction(
   const fullName = String(formData.get("full_name") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
+  const userKind =
+    formData.get("user_kind") === "empresa" ? "empresa" : "pessoa";
   if (!fullName || !email || password.length < 8) {
     return {
       error: "Informe seu nome, e-mail e uma senha com pelo menos 8 caracteres.",
@@ -50,8 +52,8 @@ export async function signUpAction(
     email,
     password,
     options: {
-      data: { full_name: fullName },
-      emailRedirectTo: `${await getAppOrigin()}/auth/callback?next=/dashboard`,
+      data: { full_name: fullName, user_kind: userKind },
+      emailRedirectTo: `${await getAppOrigin()}/auth/callback?next=${userKind === "empresa" ? "/empresa" : "/dashboard"}`,
     },
   });
   if (error) return { error: "Não foi possível criar a conta. Verifique os dados." };
@@ -60,7 +62,7 @@ export async function signUpAction(
       notice: "Conta criada. Confirme seu e-mail para acessar a plataforma.",
     };
   }
-  redirect("/dashboard");
+  redirect(userKind === "empresa" ? "/empresa" : "/dashboard");
 }
 
 export async function signOutAction() {

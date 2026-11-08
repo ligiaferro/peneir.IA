@@ -63,6 +63,7 @@ export type Database = {
         Row: {
           id: string;
           user_id: string;
+          opportunity_id: string | null;
           name: string;
           document_type: string;
           expires_at: string | null;
@@ -72,6 +73,7 @@ export type Database = {
         Insert: {
           id?: string;
           user_id: string;
+          opportunity_id?: string | null;
           name: string;
           document_type?: string;
           expires_at?: string | null;
@@ -81,13 +83,22 @@ export type Database = {
         Update: {
           id?: string;
           user_id?: string;
+          opportunity_id?: string | null;
           name?: string;
           document_type?: string;
           expires_at?: string | null;
           storage_path?: string;
           created_at?: string;
         };
-        Relationships: [];
+        Relationships: [
+          {
+            foreignKeyName: "documents_opportunity_id_fkey";
+            columns: ["opportunity_id"];
+            isOneToOne: false;
+            referencedRelation: "opportunities";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       document_analyses: {
         Row: {
