@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { updateProfileAction, type ProfileState } from "@/app/actions";
 import { categoryLabels } from "@/lib/opportunities";
+import { brazilianStateCodes, brazilianStates } from "@/lib/states";
 import type { OpportunityCategory, UserProfile } from "@/lib/types";
 
 const categories = Object.entries(categoryLabels) as [
@@ -82,6 +83,28 @@ export function ProfileForm({ profile }: { profile: UserProfile }) {
           defaultValue={profile.keywords.join(", ")}
           placeholder="ex.: engenharia, saúde, Recife"
         />
+      </div>
+      <span className="field-label">Estados de atuação</span>
+      <p className="field-hint">
+        Marque os estados onde quer encontrar oportunidades. Sem estado
+        marcado, mostramos oportunidades de todos os estados.
+      </p>
+      <div className="category-options state-options">
+        {brazilianStateCodes.map((state) => (
+          <label
+            className="category-option"
+            key={state}
+            title={brazilianStates[state]}
+          >
+            <input
+              type="checkbox"
+              name="states"
+              value={state}
+              defaultChecked={profile.states.includes(state)}
+            />
+            {state}
+          </label>
+        ))}
       </div>
       <label className="toggle-row">
         <input

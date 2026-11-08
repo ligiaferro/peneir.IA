@@ -31,8 +31,21 @@ export function getSearchCategories(
   return profile.categories.length > 0 ? profile.categories : opportunityCategories;
 }
 
+/**
+ * true quando a oportunidade está em um dos estados de atuação. Sem estados
+ * escolhidos, vale o Brasil todo; oportunidades sem UF (abrangência nacional)
+ * aparecem para todos.
+ */
+export function matchesStates(
+  opportunity: Pick<Opportunity, "uf">,
+  states: readonly string[],
+) {
+  return states.length === 0 || !opportunity.uf || states.includes(opportunity.uf);
+}
+
 export function getMatchingOpportunities(
-  profile: Pick<UserProfile, "categories" | "keywords">,
+  profile: Pick<UserProfile, "categories" | "keywords"> &
+    Partial<Pick<UserProfile, "states">>,
   opportunities: Opportunity[],
 ): Opportunity[] {
   const normalizedKeywords = profile.keywords
@@ -43,9 +56,11 @@ export function getMatchingOpportunities(
     return [];
   }
   const categories = getSearchCategories(profile);
+  const states = profile.states ?? [];
 
   return opportunities.filter((opportunity) => {
     if (!categories.includes(opportunity.category)) return false;
+    if (!matchesStates(opportunity, states)) return false;
     if (normalizedKeywords.length === 0) return true;
 
     const searchableText = normalizeSearchText(

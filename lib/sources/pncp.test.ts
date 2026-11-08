@@ -84,6 +84,7 @@ describe("mapPncpContratacao", () => {
       unidadeOrgao: { ...sample.unidadeOrgao!, ufSigla: null },
     };
     expect(mapPncpContratacao(withoutUf, undefined, "pb")?.region).toBe("PB");
+    expect(mapPncpContratacao(withoutUf, undefined, "pb")?.uf).toBe("PB");
     expect(mapPncpContratacao(sample, undefined, "PE")?.region).toBe("PE");
     expect(mapPncpContratacao(sample)?.region).toBe("PB");
   });

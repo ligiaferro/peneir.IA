@@ -388,6 +388,15 @@ h3 {
   accent-color: var(--green);
 }
 
+.state-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(58px, 1fr));
+}
+
+.state-options .category-option {
+  justify-content: center;
+}
+
 .toggle-row {
   display: flex;
   align-items: center;

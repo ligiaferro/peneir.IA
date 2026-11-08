@@ -25,6 +25,7 @@ export type Database = {
           embedding: string | null;
           embedding_model: string | null;
           embedding_updated_at: string | null;
+          states: string[];
           email_alerts: boolean;
           created_at: string;
           updated_at: string;
@@ -39,6 +40,7 @@ export type Database = {
           embedding?: string | null;
           embedding_model?: string | null;
           embedding_updated_at?: string | null;
+          states?: string[];
           email_alerts?: boolean;
           created_at?: string;
           updated_at?: string;
@@ -53,6 +55,7 @@ export type Database = {
           embedding?: string | null;
           embedding_model?: string | null;
           embedding_updated_at?: string | null;
+          states?: string[];
           email_alerts?: boolean;
           created_at?: string;
           updated_at?: string;

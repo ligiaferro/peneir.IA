@@ -147,15 +147,18 @@ export function mapPncpContratacao(
     .filter(Boolean)
     .map((tag) => tag.toLocaleLowerCase("pt-BR"));
 
+  const region = queriedUf?.trim().toUpperCase() || uf;
+
   return {
     id: `pncp:${item.numeroControlePNCP}`,
     externalId: item.numeroControlePNCP,
     source: "pncp",
-    region: queriedUf?.trim().toUpperCase() || uf,
+    region,
     category: "licitacoes",
     title: truncate(objeto, 160),
     organization,
     location: [city, uf].filter(Boolean).join(", ") || "Brasil",
+    uf: region || null,
     summary: summaryParts.join(" "),
     tags: [...new Set(tags)],
     requirements: genericBiddingRequirements,

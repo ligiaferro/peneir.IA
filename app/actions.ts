@@ -5,6 +5,7 @@ import { createEmbeddings, getEmbeddingModel, vectorToPostgres } from "@/lib/ai"
 import { buildProfileEmbeddingText } from "@/lib/opportunity-indexing";
 import { createClient } from "@/lib/supabase/server";
 import { isOpportunityCategory } from "@/lib/opportunities";
+import { normalizeStates } from "@/lib/states";
 
 export type ProfileState = { error?: string; notice?: string };
 
@@ -24,6 +25,7 @@ export async function updateProfileAction(
     .map((keyword) => keyword.trim())
     .filter(Boolean)
     .slice(0, 20);
+  const { states } = normalizeStates(formData.getAll("states").map(String));
   const emailAlerts = formData.get("email_alerts") === "on";
 
   if (!fullName) {
@@ -111,6 +113,7 @@ export async function updateProfileAction(
       keywords,
       products_services: productsServices,
       ...embeddingUpdate,
+      states,
       email_alerts: emailAlerts,
       updated_at: new Date().toISOString(),
     })

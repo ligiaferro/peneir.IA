@@ -7,6 +7,7 @@ import {
 import { isCronAuthorized } from "@/lib/cron-auth";
 import { formatDeadline } from "@/lib/format";
 import { listOpenOpportunities } from "@/lib/opportunity-store";
+import { brazilianStateCodes, normalizeStates } from "@/lib/states";
 import { createServiceClient } from "@/lib/supabase/admin";
 import type { Database } from "@/lib/supabase/database.types";
 import type { Opportunity } from "@/lib/types";
@@ -140,12 +141,12 @@ async function loadAuthUsers(supabase: ServiceClient) {
 async function loadAlertProfiles(supabase: ServiceClient) {
   const profiles: Pick<
     Database["public"]["Tables"]["profiles"]["Row"],
-    "id" | "full_name" | "categories" | "keywords"
+    "id" | "full_name" | "categories" | "keywords" | "states"
   >[] = [];
   for (let from = 0; ; from += readPageSize) {
     const { data, error } = await supabase
       .from("profiles")
-      .select("id, full_name, categories, keywords")
+      .select("id, full_name, categories, keywords, states")
       .eq("email_alerts", true)
       .order("id")
       .range(from, from + readPageSize - 1);
@@ -209,30 +210,30 @@ export async function GET(request: NextRequest) {
     (opportunity) =>
       new Date(opportunity.firstSeenAt).getTime() >= newSince,
   );
-  const states = [
-    ...new Set(
-      (process.env.PNCP_UFS ?? "PE")
-        .split(",")
-        .map((state) => state.trim().toUpperCase())
-        .filter((state) => /^[A-Z]{2}$/.test(state)),
-    ),
-  ];
-  let vectorMatches: Array<{
+  // Perfis sem estado escolhido recebem oportunidades de todas as UFs. Os perfis
+  // são agrupados por estados porque o limite por usuário é aplicado no banco,
+  // antes de qualquer filtro feito aqui.
+  const profilesByStates = new Map<string, { states: string[]; ids: string[] }>();
+  for (const profile of profiles) {
+    const { states: chosen } = normalizeStates(profile.states);
+    const states = chosen.length > 0 ? chosen : brazilianStateCodes;
+    const key = states.join(",");
+    const group = profilesByStates.get(key) ?? { states, ids: [] };
+    group.ids.push(profile.id);
+    profilesByStates.set(key, group);
+  }
+  const vectorMatches: Array<{
     user_id: string;
     opportunity_id: string;
     similarity: number;
-  }>;
+  }> = [];
   try {
-    if (profiles.length === 0) {
-      vectorMatches = [];
-    } else {
-      vectorMatches = [];
-      for (let start = 0; start < profiles.length; start += semanticMatchBatchSize) {
-        const batch = profiles.slice(start, start + semanticMatchBatchSize);
+    for (const { states, ids } of profilesByStates.values()) {
+      for (let start = 0; start < ids.length; start += semanticMatchBatchSize) {
         const { data, error } = await supabase.rpc(
           "match_opportunities_for_users",
           {
-            p_user_ids: batch.map(({ id }) => id),
+            p_user_ids: ids.slice(start, start + semanticMatchBatchSize),
             p_regions: states,
             p_min_similarity: minimumOpportunitySimilarity,
             p_limit_per_user: maxItemsPerEmail,

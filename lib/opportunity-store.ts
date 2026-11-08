@@ -7,7 +7,7 @@ type Client = SupabaseClient<Database>;
 type OpportunityInsert = Database["public"]["Tables"]["opportunities"]["Insert"];
 
 const opportunityColumns =
-  "id, source, category, title, organization, location, summary, tags, requirements, requirements_are_generic, deadline, published_at, first_seen_at, source_url";
+  "id, source, region, category, title, organization, location, summary, tags, requirements, requirements_are_generic, deadline, published_at, first_seen_at, source_url";
 
 /** O PostgREST limita cada resposta (padrão: 1000 linhas). */
 const readPageSize = 1000;
@@ -19,6 +19,7 @@ const opportunityFetchBatchSize = 200;
 type OpportunityRow = {
   id: string;
   source: "pncp";
+  region: string;
   category: OpportunityCategory;
   title: string;
   organization: string;
@@ -46,6 +47,7 @@ function rowToOpportunity(row: OpportunityRow): Opportunity {
     title: row.title,
     organization: row.organization,
     location: row.location,
+    uf: row.region || null,
     summary: row.summary,
     tags: row.tags,
     requirements: row.requirements,
@@ -57,24 +59,31 @@ function rowToOpportunity(row: OpportunityRow): Opportunity {
   };
 }
 
-/** Oportunidades reais com prazo aberto nas categorias pedidas. */
+/**
+ * Oportunidades reais com prazo aberto nas categorias pedidas.
+ * Com `states`, mantém só as dessas UFs; vazio = todos os estados.
+ */
 export async function listOpenOpportunities(
   supabase: Client,
   categories: readonly OpportunityCategory[],
+  states: readonly string[] = [],
 ): Promise<Opportunity[]> {
   if (categories.length === 0) return [];
   const now = new Date();
   const rows: OpportunityRow[] = [];
 
   for (let from = 0; ; from += readPageSize) {
-    const { data, error } = await supabase
+    let query = supabase
       .from("opportunities")
       .select(opportunityColumns)
       .eq("index_status", "indexed")
       .not("embedding", "is", null)
       .is("closed_at", null)
       .gt("deadline", now.toISOString())
-      .in("category", [...categories])
+      .in("category", [...categories]);
+    // A coleta sempre grava a UF consultada em `region`.
+    if (states.length > 0) query = query.in("region", [...states]);
+    const { data, error } = await query
       .order("published_at", { ascending: false })
       .order("id")
       .range(from, from + readPageSize - 1);

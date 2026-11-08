@@ -17,7 +17,7 @@ export default async function CompanyPage() {
   const [profileResult, documentsResult, analysesResult] = await Promise.all([
     supabase
       .from("profiles")
-      .select("id, full_name, user_kind, categories, keywords, products_services, embedding_model, email_alerts")
+      .select("id, full_name, user_kind, categories, keywords, products_services, embedding_model, states, email_alerts")
       .eq("id", authData.user.id)
       .maybeSingle(),
     supabase
@@ -49,6 +49,7 @@ export default async function CompanyPage() {
     keywords: profileResult.data.keywords,
     products_services: profileResult.data.products_services,
     embedding_model: profileResult.data.embedding_model,
+    states: profileResult.data.states ?? [],
     email_alerts: profileResult.data.email_alerts,
   };
   const opportunityIds = [

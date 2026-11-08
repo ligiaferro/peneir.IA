@@ -21,10 +21,24 @@ const bidding: Opportunity = {
   publishedAt: "2026-11-06T12:00:00.000Z",
   firstSeenAt: "2026-11-07T10:00:00.000Z",
   sourceUrl: "https://pncp.gov.br/app/editais/00000000000191/2026/1",
+  uf: "PE",
 };
 const opportunities = [bidding];
 
 describe("getMatchingOpportunities", () => {
+  it("filters by the profile states", () => {
+    const saoPaulo = { ...bidding, id: "pncp:sp", uf: "SP", location: "São Paulo, SP" };
+    const national = { ...bidding, id: "pncp:br", uf: null, location: "Brasil" };
+    const pool = [bidding, saoPaulo, national];
+    const ids = (states: string[]) =>
+      getMatchingOpportunities({ categories: ["licitacoes"], keywords: [], states }, pool)
+        .map((item) => item.id);
+
+    expect(ids(["SP"])).toEqual(["pncp:sp", "pncp:br"]);
+    expect(ids(["PE", "SP"])).toEqual([bidding.id, "pncp:sp", "pncp:br"]);
+    expect(ids([])).toEqual([bidding.id, "pncp:sp", "pncp:br"]);
+  });
+
   it("returns no matches for categories without real opportunities", () => {
     const results = getMatchingOpportunities(
       { categories: ["doutorado"], keywords: [] },

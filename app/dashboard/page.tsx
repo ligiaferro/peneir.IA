@@ -8,6 +8,7 @@ import {
   listMatchingOpportunities,
   upsertOpportunities,
 } from "@/lib/opportunity-store";
+import { mapWithConcurrency } from "@/lib/concurrency";
 import { indexPendingOpportunities } from "@/lib/opportunity-indexing";
 import {
   fetchOpenContratacoes,
@@ -15,6 +16,7 @@ import {
   pncpDateParam,
   type OpportunityRecord,
 } from "@/lib/sources/pncp";
+import { brazilianStateCodes, normalizeStates } from "@/lib/states";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type {
@@ -33,7 +35,7 @@ export default async function DashboardPage() {
 
   const profileResult = await supabase
       .from("profiles")
-      .select("id, full_name, user_kind, categories, keywords, products_services, embedding_model, email_alerts")
+      .select("id, full_name, user_kind, categories, keywords, products_services, embedding_model, states, email_alerts")
       .eq("id", authData.user.id)
       .maybeSingle();
   if (profileResult.error) {
@@ -53,27 +55,29 @@ export default async function DashboardPage() {
     keywords: profileResult.data.keywords,
     products_services: profileResult.data.products_services,
     embedding_model: profileResult.data.embedding_model,
+    states: profileResult.data.states ?? [],
     email_alerts: profileResult.data.email_alerts,
   };
   const hasSearch =
     profile.categories.length > 0 ||
     profile.keywords.some((keyword) => keyword.trim().length > 0);
   const searchCategories = getSearchCategories(profile);
-  const states = [
-    ...new Set(
-      (process.env.PNCP_UFS ?? "PE")
-        .split(",")
-        .map((state) => state.trim().toUpperCase())
-        .filter((state) => /^[A-Z]{2}$/.test(state)),
-    ),
-  ];
+  // Busca nos estados escolhidos; sem escolha, em todas as UFs coletadas.
+  const matchStates =
+    profile.states.length > 0 ? profile.states : brazilianStateCodes;
+  // A consulta ao vivo cobre só os estados escolhidos (ou os de PNCP_UFS), para
+  // caber no tempo de carregamento da página.
+  const liveStates =
+    profile.states.length > 0
+      ? profile.states
+      : normalizeStates((process.env.PNCP_UFS ?? "PE").split(",")).states;
   let openOpportunities: Opportunity[];
   try {
     openOpportunities = await listMatchingOpportunities(
       supabase,
       profile.id,
       searchCategories,
-      states,
+      matchStates,
     );
   } catch (error) {
     const message =
@@ -99,57 +103,60 @@ export default async function DashboardPage() {
       Number.isInteger(configuredDaysAhead) && configuredDaysAhead > 0
         ? Math.min(configuredDaysAhead, 365)
         : 60;
-    const liveRecords: OpportunityRecord[] = [];
+    const configuredConcurrency = Number.parseInt(
+      process.env.PNCP_CONCURRENCY ?? "",
+      10,
+    );
+    const concurrency =
+      Number.isInteger(configuredConcurrency) && configuredConcurrency > 0
+        ? Math.min(configuredConcurrency, 6)
+        : 3;
 
-    if (states.length === 0) pncpRefreshError = true;
-    for (let index = 0; index < states.length; index += 1) {
-      const uf = states[index];
-      if (Date.now() + 1_000 >= stopAt) {
-        pncpRefreshError = true;
-        break;
-      }
-      if (index > 0) {
-        await new Promise((resolve) => setTimeout(resolve, 1_500));
-        if (Date.now() + 250 >= stopAt) {
+    if (liveStates.length === 0) pncpRefreshError = true;
+    // Uma página por UF, com até `concurrency` UFs consultadas ao mesmo tempo.
+    const liveResults = await mapWithConcurrency(
+      liveStates,
+      concurrency,
+      async (uf): Promise<OpportunityRecord[]> => {
+        if (Date.now() + 1_000 >= stopAt) {
           pncpRefreshError = true;
-          break;
+          return [];
         }
-      }
-
-      try {
-        pncpWasQueried = true;
-        const result = await fetchOpenContratacoes({
-          uf,
-          dataFinal: pncpDateParam(daysAhead),
-          maxPages: 1,
-          pageSize: 50,
-          delayMs: 0,
-          retryDelaysMs: [],
-          stopAt,
-          timeoutMs: Math.min(4_000, stopAt - Date.now()),
-          userAgent: `peneir.IA/0.1 (+${process.env.NEXT_PUBLIC_APP_URL ?? "https://peneir.ia"})`,
-        });
-        if (result.error) {
-          pncpRefreshError = true;
-          console.error("PNCP live dashboard query was incomplete.", {
+        try {
+          pncpWasQueried = true;
+          const result = await fetchOpenContratacoes({
             uf,
-            error: result.error,
+            dataFinal: pncpDateParam(daysAhead),
+            maxPages: 1,
+            pageSize: 50,
+            delayMs: 0,
+            retryDelaysMs: [],
+            stopAt,
+            timeoutMs: Math.min(4_000, stopAt - Date.now()),
+            userAgent: `peneir.IA/0.1 (+${process.env.NEXT_PUBLIC_APP_URL ?? "https://peneir.ia"})`,
           });
-        }
-        const fetchedAt = new Date().toISOString();
-        liveRecords.push(
-          ...result.items
+          if (result.error) {
+            pncpRefreshError = true;
+            console.error("PNCP live dashboard query was incomplete.", {
+              uf,
+              error: result.error,
+            });
+          }
+          const fetchedAt = new Date().toISOString();
+          return result.items
             .map((item) => mapPncpContratacao(item, fetchedAt, uf))
-            .filter((record): record is OpportunityRecord => record !== null),
-        );
-      } catch (error) {
-        pncpRefreshError = true;
-        console.error("PNCP live dashboard query failed.", {
-          uf,
-          error: error instanceof Error ? error.message : String(error),
-        });
-      }
-    }
+            .filter((record): record is OpportunityRecord => record !== null);
+        } catch (error) {
+          pncpRefreshError = true;
+          console.error("PNCP live dashboard query failed.", {
+            uf,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          return [];
+        }
+      },
+    );
+    const liveRecords = liveResults.flat();
 
     if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
       pncpRefreshError = true;
@@ -180,7 +187,7 @@ export default async function DashboardPage() {
           supabase,
           profile.id,
           searchCategories,
-          states,
+          matchStates,
         );
       } catch (error) {
         pncpRefreshError = true;
@@ -309,9 +316,11 @@ export default async function DashboardPage() {
               <p>
                 {matches.length}{" "}
                 {matches.length === 1 ? "licitação ativa" : "licitações ativas"}{" "}
-                do PNCP, ordenadas por score de similaridade. O percentual
-                representa similaridade semântica, não chance de contratação
-                ou habilitação.
+                do PNCP
+                {profile.states.length > 0 && ` em ${profile.states.join(", ")}`},
+                ordenadas por score de similaridade. O percentual representa
+                similaridade semântica, não chance de contratação ou
+                habilitação.
               </p>
             </div>
             <span className="badge">
@@ -339,7 +348,9 @@ export default async function DashboardPage() {
           ) : matches.length === 0 ? (
             <div className="empty-state">
               Nenhuma licitação ativa e indexada foi encontrada nas categorias
-              e UFs selecionadas. O PNCP é a fonte de licitações conectada.
+              e estados selecionados. O PNCP é a fonte de licitações
+              conectada; ajuste categorias, palavras-chave ou estados do
+              perfil.
             </div>
           ) : (
             <div className="opportunity-grid">

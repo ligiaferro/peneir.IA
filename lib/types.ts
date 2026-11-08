@@ -16,6 +16,8 @@ export type Opportunity = {
   organization: string;
   category: OpportunityCategory;
   location: string;
+  /** UF da oportunidade; null quando não há UF (abrangência nacional). */
+  uf: string | null;
   summary: string;
   tags: string[];
   matchScore?: number;
@@ -38,6 +40,8 @@ export type UserProfile = {
   keywords: string[];
   products_services: string;
   embedding_model: string | null;
+  /** UFs de atuação. Vazio = todos os estados. */
+  states: string[];
   email_alerts: boolean;
 };
 
