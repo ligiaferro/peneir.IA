@@ -922,6 +922,170 @@ h3 {
   }
 }
 
+/* ---------- Leitura do edital ---------- */
+
+.edital-panel {
+  padding: 24px 26px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(215, 237, 118, 0.18), transparent 16rem),
+    var(--surface);
+}
+
+.edital-panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.edital-panel-head h2 {
+  margin: 8px 0 0;
+  font-size: 22px;
+}
+
+.edital-progress {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+  border-radius: 14px;
+  background: var(--mint);
+  color: var(--green-dark);
+}
+
+.edital-progress strong {
+  font-size: 14px;
+}
+
+.edital-progress p {
+  margin: 4px 0 0;
+  color: #476058;
+  font-size: 12px;
+}
+
+.edital-spinner {
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border: 3px solid rgba(27, 113, 89, 0.2);
+  border-top-color: var(--green);
+  border-radius: 50%;
+  animation: edital-spin 0.9s linear infinite;
+}
+
+@keyframes edital-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .edital-spinner {
+    animation-duration: 3s;
+  }
+}
+
+.edital-message {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.edital-message .notice {
+  flex: 1 1 320px;
+  margin: 0;
+}
+
+.edital-summary {
+  margin: 0 0 16px;
+  color: var(--ink);
+  font-size: 15px;
+  line-height: 1.65;
+}
+
+.edital-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+  margin: 0 0 16px;
+}
+
+.edital-field {
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: white;
+}
+
+.edital-field dt {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.edital-field dd {
+  margin: 4px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.edital-alerts {
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: #fff6ee;
+  color: #7a4a1f;
+  font-size: 13px;
+}
+
+.edital-alerts ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  line-height: 1.6;
+}
+
+.edital-files {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.edital-file {
+  padding: 4px 9px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: white;
+  color: #476058;
+}
+
+.edital-file:hover {
+  border-color: #acd0bd;
+  color: var(--green);
+}
+
+.edital-file-lido {
+  border-color: #acd0bd;
+  background: var(--mint);
+  color: var(--green-dark);
+}
+
+.requirement-detail {
+  margin: -4px 0 10px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 /* ---------- Página inicial ---------- */
 
 .lp {

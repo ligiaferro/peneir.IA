@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { suggestDocumentsForRequirement } from "@/lib/document-matching";
+import { getAcceptedRequirements } from "@/lib/edital-store";
 import { createClient } from "@/lib/supabase/server";
 import type { UserDocument } from "@/lib/types";
 
@@ -86,7 +87,11 @@ export async function POST(request: NextRequest) {
       { status: 400 },
     );
   }
-  const requirements = opportunityResult.data.requirements;
+  const requirements = await getAcceptedRequirements(
+    supabase,
+    opportunityResult.data.id,
+    opportunityResult.data.requirements,
+  );
   const validRequirement =
     requirements.includes(requirement) ||
     (requirements.length === 0 && requirement === "Documento complementar");

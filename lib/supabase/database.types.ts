@@ -169,6 +169,45 @@ export type Database = {
         };
         Relationships: [];
       };
+      opportunity_editais: {
+        Row: {
+          opportunity_id: string;
+          status: "processing" | "ready" | "no_files" | "no_text" | "failed";
+          files: Json;
+          insights: Json | null;
+          requirements: string[];
+          text_length: number | null;
+          model: string | null;
+          error: string | null;
+          processed_at: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          opportunity_id: string;
+          status?: "processing" | "ready" | "no_files" | "no_text" | "failed";
+          files?: Json;
+          insights?: Json | null;
+          requirements?: string[];
+          text_length?: number | null;
+          model?: string | null;
+          error?: string | null;
+          processed_at?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          opportunity_id?: string;
+          status?: "processing" | "ready" | "no_files" | "no_text" | "failed";
+          files?: Json;
+          insights?: Json | null;
+          requirements?: string[];
+          text_length?: number | null;
+          model?: string | null;
+          error?: string | null;
+          processed_at?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       notification_deliveries: {
         Row: {
           id: string;
@@ -289,6 +328,10 @@ export type Database = {
     };
     Views: Record<string, never>;
     Functions: {
+      claim_edital_processing: {
+        Args: { p_opportunity_id: string };
+        Returns: boolean;
+      };
       claim_opportunity_notification: {
         Args: {
           p_user_id: string;

@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { signOutAction } from "@/app/auth/actions";
 import { OpportunityDetail } from "@/components/opportunity-detail";
+import { getOpportunityEdital, withEditalRequirements } from "@/lib/edital-store";
 import { getOpportunityById } from "@/lib/opportunity-store";
 import { createClient } from "@/lib/supabase/server";
 import type {
@@ -26,7 +27,8 @@ export default async function OpportunityPage({
   if (authError || !authData.user) redirect("/login");
 
   const [
-    opportunity,
+    baseOpportunity,
+    edital,
     profileResult,
     documentsResult,
     analysesResult,
@@ -34,6 +36,8 @@ export default async function OpportunityPage({
   ] =
     await Promise.all([
       getOpportunityById(supabase, opportunityId),
+      // Sem a migração do edital, a página segue com a lista genérica.
+      getOpportunityEdital(supabase, opportunityId).catch(() => null),
       supabase
         .from("profiles")
         .select("user_kind")
@@ -56,7 +60,8 @@ export default async function OpportunityPage({
         .eq("opportunity_id", opportunityId),
     ]);
 
-  if (!opportunity) notFound();
+  if (!baseOpportunity) notFound();
+  const opportunity = withEditalRequirements(baseOpportunity, edital);
   if (profileResult.error || !profileResult.data) {
     throw new Error("Não foi possível carregar seu perfil.");
   }
@@ -108,6 +113,7 @@ export default async function OpportunityPage({
         </Link>
         <OpportunityDetail
           opportunity={opportunity}
+          edital={edital}
           initialDocuments={documents}
           initialAnalyses={analyses}
           initialLinks={links}

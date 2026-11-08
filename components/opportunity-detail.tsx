@@ -3,7 +3,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { DocumentUploader } from "@/components/document-uploader";
+import { EditalPanel } from "@/components/edital-panel";
 import { suggestDocumentsForRequirement } from "@/lib/document-matching";
+import {
+  editalRequirementCategories,
+  type OpportunityEdital,
+} from "@/lib/edital-insights";
 import { formatDate, formatDeadline } from "@/lib/format";
 import { categoryLabels } from "@/lib/opportunities";
 import {
@@ -24,11 +29,13 @@ type AnalysisRecord = {
 
 export function OpportunityDetail({
   opportunity,
+  edital,
   initialDocuments,
   initialAnalyses,
   initialLinks,
 }: {
   opportunity: Opportunity;
+  edital: OpportunityEdital | null;
   initialDocuments: UserDocument[];
   initialAnalyses: AnalysisRecord[];
   initialLinks: UserDocumentOpportunityLink[];
@@ -45,19 +52,50 @@ export function OpportunityDetail({
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const router = useRouter();
-  const requirements =
-    [...new Set(opportunity.requirements.filter(Boolean))].length > 0
-      ? [...new Set(opportunity.requirements.filter(Boolean))]
-      : ["Documento complementar"];
-  const opportunityDocuments = [
-    ...new Set(
-      links
-        .filter((link) => link.opportunity_id === opportunity.id)
-        .map((link) => link.document_id),
-    ),
-  ]
-    .map((id) => documents.find((document) => document.id === id))
-    .filter((document): document is UserDocument => document !== undefined);
+  const requirements = useMemo(() => {
+    const unique = [...new Set(opportunity.requirements.filter(Boolean))];
+    return unique.length > 0 ? unique : ["Documento complementar"];
+  }, [opportunity.requirements]);
+  const opportunityDocuments = useMemo(
+    () =>
+      [
+        ...new Set(
+          links
+            .filter((link) => link.opportunity_id === opportunity.id)
+            .map((link) => link.document_id),
+        ),
+      ]
+        .map((id) => documents.find((document) => document.id === id))
+        .filter((document): document is UserDocument => document !== undefined),
+    [documents, links, opportunity.id],
+  );
+
+  // Categoria e exigência específica de cada documento, quando vêm do edital.
+  const requirementDetails = useMemo(
+    () =>
+      new Map(
+        (!opportunity.requirementsAreGeneric ? edital?.insights?.requisitos ?? [] : []).map(
+          (item) => [item.documento, item],
+        ),
+      ),
+    [edital, opportunity.requirementsAreGeneric],
+  );
+  // Requisitos com documentos vinculados que não estão mais na lista (por
+  // exemplo, da lista genérica, antes de ela ser trocada pela do edital).
+  const previousRequirements = useMemo(
+    () => [
+      ...new Set(
+        links
+          .filter(
+            (link) =>
+              link.opportunity_id === opportunity.id &&
+              !requirements.includes(link.requirement),
+          )
+          .map((link) => link.requirement),
+      ),
+    ],
+    [links, opportunity.id, requirements],
+  );
 
   const currentAnalysis = useMemo(
     () => analyses.find((analysis) => analysis.document_id === documentId),
@@ -72,6 +110,17 @@ export function OpportunityDetail({
       setDocumentId(opportunityDocuments[0]?.id ?? "");
     }
   }, [opportunityDocuments, documentId]);
+
+  function linkedDocuments(requirement: string) {
+    return links
+      .filter(
+        (link) =>
+          link.opportunity_id === opportunity.id &&
+          link.requirement === requirement,
+      )
+      .map((link) => documents.find((document) => document.id === link.document_id))
+      .filter((document): document is UserDocument => document !== undefined);
+  }
 
   function addDocumentAssociation(
     document: UserDocument,
@@ -183,6 +232,10 @@ export function OpportunityDetail({
         </a>
       </div>
 
+      {opportunity.source === "pncp" && (
+        <EditalPanel opportunityId={opportunity.id} initialEdital={edital} />
+      )}
+
       <section className="section">
         <div className="section-heading">
           <div>
@@ -194,10 +247,15 @@ export function OpportunityDetail({
             </p>
           </div>
         </div>
-        {opportunity.requirementsAreGeneric && (
+        {opportunity.requirementsAreGeneric ? (
           <p className="notice">
             Esta lista é uma orientação geral e pode não corresponder aos
             documentos exigidos no edital. Confira a fonte oficial.
+          </p>
+        ) : (
+          <p className="notice">
+            Documentos extraídos do edital pela IA. Confira sempre o edital
+            oficial e seus anexos antes de enviar a proposta.
           </p>
         )}
         <div className="requirement-list">
@@ -206,27 +264,22 @@ export function OpportunityDetail({
               className="panel requirement-panel"
               key={`${index}-${requirement}`}
             >
-              <span className="eyebrow">Documento {index + 1}</span>
+              <span className="eyebrow">
+                Documento {index + 1}
+                {requirementDetails.get(requirement) &&
+                  ` · ${editalRequirementCategories[requirementDetails.get(requirement)!.categoria]}`}
+              </span>
               <h3>{requirement}</h3>
+              {requirementDetails.get(requirement)?.detalhe && (
+                <p className="requirement-detail">
+                  {requirementDetails.get(requirement)!.detalhe}
+                </p>
+              )}
               <DocumentUploader
                 opportunityId={opportunity.id}
                 fieldId={`requirement-${index}`}
                 requirement={requirement}
-                documents={links
-                  .filter(
-                    (link) =>
-                      link.opportunity_id === opportunity.id &&
-                      link.requirement === requirement,
-                  )
-                  .map((link) =>
-                    documents.find(
-                      (document) => document.id === link.document_id,
-                    ),
-                  )
-                  .filter(
-                    (document): document is UserDocument =>
-                      document !== undefined,
-                  )}
+                documents={linkedDocuments(requirement)}
                 suggestions={suggestDocumentsForRequirement(
                   requirement,
                   documents.filter(
@@ -242,6 +295,27 @@ export function OpportunityDetail({
                       ),
                   ),
                 )}
+                onUploaded={addDocumentAssociation}
+                onLinked={addDocumentAssociation}
+                onUnlinked={(documentId) =>
+                  removeDocumentAssociation(requirement, documentId)
+                }
+              />
+            </section>
+          ))}
+          {previousRequirements.map((requirement, index) => (
+            <section
+              className="panel requirement-panel"
+              key={`previous-${index}-${requirement}`}
+            >
+              <span className="eyebrow">Vinculado anteriormente</span>
+              <h3>{requirement}</h3>
+              <DocumentUploader
+                opportunityId={opportunity.id}
+                fieldId={`previous-${index}`}
+                requirement={requirement}
+                documents={linkedDocuments(requirement)}
+                suggestions={[]}
                 onUploaded={addDocumentAssociation}
                 onLinked={addDocumentAssociation}
                 onUnlinked={(documentId) =>

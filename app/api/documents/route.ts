@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { getAcceptedRequirements } from "@/lib/edital-store";
 import { createClient } from "@/lib/supabase/server";
 import type {
   UserDocument,
@@ -50,9 +51,14 @@ export async function POST(request: NextRequest) {
   if (!opportunity) {
     return NextResponse.json({ error: "Oportunidade não encontrada." }, { status: 404 });
   }
+  const acceptedRequirements = await getAcceptedRequirements(
+    supabase,
+    opportunity.id,
+    opportunity.requirements,
+  );
   const validRequirement =
-    opportunity.requirements.includes(documentType) ||
-    (opportunity.requirements.length === 0 &&
+    acceptedRequirements.includes(documentType) ||
+    (acceptedRequirements.length === 0 &&
       documentType === "Documento complementar");
   if (!validRequirement) {
     return NextResponse.json(

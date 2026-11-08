@@ -1,8 +1,9 @@
 import OpenAI from "openai";
 import { NextResponse, type NextRequest } from "next/server";
-import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
+import { getOpportunityEdital, withEditalRequirements } from "@/lib/edital-store";
 import { getExpiryWarnings } from "@/lib/expiry";
 import { getOpportunityById } from "@/lib/opportunity-store";
+import { extractPdfText } from "@/lib/pdf-text";
 import { createClient } from "@/lib/supabase/server";
 import type { AnalysisResult, Opportunity } from "@/lib/types";
 
@@ -15,26 +16,6 @@ const requirementStatuses = [
   "nao_atende",
   "inconclusivo",
 ] as const;
-
-async function extractPdfText(bytes: Buffer) {
-  const pdf = await getDocument({ data: new Uint8Array(bytes) }).promise;
-  const pages: string[] = [];
-
-  for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
-    const page = await pdf.getPage(pageNumber);
-    const content = await page.getTextContent();
-    pages.push(
-      content.items
-        .map((item) => ("str" in item ? item.str : ""))
-        .filter(Boolean)
-        .join(" "),
-    );
-    page.cleanup();
-  }
-
-  await pdf.destroy();
-  return pages.join("\n").replace(/\s+/g, " ").trim();
-}
 
 function parseAnalysisResult(value: string): AnalysisResult {
   const parsed: unknown = JSON.parse(value);
@@ -111,29 +92,34 @@ export async function POST(request: NextRequest) {
   const opportunityId = body.opportunityId;
   const documentId = body.documentId;
   let opportunity: Opportunity | null;
+  let edital: Awaited<ReturnType<typeof getOpportunityEdital>> = null;
   let document;
   let association;
   try {
-    const [opportunityResult, documentResult, associationResult] = await Promise.all([
-      getOpportunityById(supabase, opportunityId),
-      supabase
-        .from("documents")
-        .select("id, user_id, opportunity_id, name, document_type, expires_at, storage_path")
-        .eq("id", documentId)
-        .eq("user_id", authData.user.id)
-        .maybeSingle(),
-      supabase
-        .from("document_opportunities")
-        .select("document_id")
-        .eq("user_id", authData.user.id)
-        .eq("document_id", documentId)
-        .eq("opportunity_id", opportunityId)
-        .maybeSingle(),
-    ]);
+    const [opportunityResult, editalResult, documentResult, associationResult] =
+      await Promise.all([
+        getOpportunityById(supabase, opportunityId),
+        // Sem a migração do edital, a análise segue com a lista genérica.
+        getOpportunityEdital(supabase, opportunityId).catch(() => null),
+        supabase
+          .from("documents")
+          .select("id, user_id, opportunity_id, name, document_type, expires_at, storage_path")
+          .eq("id", documentId)
+          .eq("user_id", authData.user.id)
+          .maybeSingle(),
+        supabase
+          .from("document_opportunities")
+          .select("document_id")
+          .eq("user_id", authData.user.id)
+          .eq("document_id", documentId)
+          .eq("opportunity_id", opportunityId)
+          .maybeSingle(),
+      ]);
     if (documentResult.error || associationResult.error) {
       throw documentResult.error ?? associationResult.error;
     }
-    opportunity = opportunityResult;
+    opportunity = opportunityResult && withEditalRequirements(opportunityResult, editalResult);
+    edital = editalResult;
     document = documentResult.data;
     association = associationResult.data;
   } catch {
@@ -172,7 +158,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const bytes = Buffer.from(await file.arrayBuffer());
-    const extractedText = await extractPdfText(bytes);
+    const { text: extractedText } = await extractPdfText(bytes);
     if (!extractedText) {
       return NextResponse.json(
         {
@@ -186,6 +172,7 @@ export async function POST(request: NextRequest) {
       extractedText.length > maxExtractedTextLength
         ? `${extractedText.slice(0, maxExtractedTextLength)}\n[Texto truncado por exceder o limite de análise.]`
         : extractedText;
+    const editalDetails = !opportunity.requirementsAreGeneric ? edital?.insights : null;
     const baseURL = process.env.OPENAI_BASE_URL?.trim();
     const client = new OpenAI({
       apiKey,
@@ -213,7 +200,9 @@ export async function POST(request: NextRequest) {
               requisitos: opportunity.requirements,
               observacaoRequisitos: opportunity.requirementsAreGeneric
                 ? "Requisitos usuais de habilitação da Lei 14.133/2021, não lidos do edital. Indique em reviewNotes que o edital pode exigir documentos diferentes."
-                : null,
+                : "Requisitos extraídos do edital oficial por IA. Use os detalhes (valores, prazos, quantidades) para comparar com o documento.",
+              requisitosDetalhados: editalDetails?.requisitos ?? null,
+              condicoesEdital: editalDetails?.campos ?? null,
             },
             textoDocumento: documentText,
           }),
