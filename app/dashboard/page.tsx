@@ -393,6 +393,7 @@ export default async function DashboardPage({
               Não foi possível consultar o estado da leitura dos editais. A leitura
               automática dos cards foi pausada; confira a migração 0008.
             </p>
+          )}
           {profile.embedding_model && authData.user.email && (
             <SendAlertButton email={authData.user.email} />
           )}
