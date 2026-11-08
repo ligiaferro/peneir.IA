@@ -1,4 +1,7 @@
-create or replace function public.claim_edital_processing(p_opportunity_id text)
+create or replace function public.claim_edital_processing(
+  p_opportunity_id text,
+  p_force boolean default false
+)
 returns boolean
 language plpgsql
 security definer
@@ -17,6 +20,7 @@ begin
   where opportunity_id = p_opportunity_id
     and (
       status in ('failed', 'no_files', 'no_text')
+      or (p_force and status in ('ready', 'no_text'))
       or (status = 'processing' and updated_at < now() - interval '10 minutes')
     );
   return found;

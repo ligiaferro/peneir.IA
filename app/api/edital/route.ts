@@ -97,13 +97,14 @@ export async function POST(request: NextRequest) {
     ? await admin.rpc("claim_edital_reread", {
         p_opportunity_id: opportunity.id,
       })
-    :     await admin.rpc("claim_edital_processing", {
-      p_opportunity_id: opportunity.id,
-    });
+    : await admin.rpc("claim_edital_processing", {
+        p_opportunity_id: opportunity.id,
+        p_force: false,
+      });
   if (claimError) {
     console.error("Could not claim edital processing.", { error: claimError.message });
     return NextResponse.json(
-      { error: "Não foi possível iniciar a leitura. Confira se a migração 0008 foi executada." },
+      { error: "Não foi possível iniciar a leitura. Confira se as migrações do edital foram executadas." },
       { status: 502 },
     );
   }
