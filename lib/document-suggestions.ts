@@ -7,24 +7,6 @@ const categorySuggestions: Record<OpportunityCategory, string[]> = {
     "Atestado de capacidade técnica",
     "Proposta comercial",
   ],
-  concursos: [
-    "Documento de identidade e CPF",
-    "Diploma ou certificado de escolaridade",
-    "Currículo",
-    "Comprovante de inscrição",
-  ],
-  doutorado: [
-    "Diploma e histórico acadêmico",
-    "Projeto de pesquisa",
-    "Currículo Lattes",
-    "Carta de intenção",
-  ],
-  bolsas: [
-    "Currículo Lattes ou acadêmico",
-    "Plano de trabalho ou projeto",
-    "Comprovante de vínculo institucional",
-    "Comprovantes de titulação",
-  ],
 };
 
 const keywordSuggestions: Array<{ keywords: string[]; documents: string[] }> = [
@@ -35,14 +17,6 @@ const keywordSuggestions: Array<{ keywords: string[]; documents: string[] }> = [
   {
     keywords: ["saúde", "medicina", "enfermagem", "odontologia"],
     documents: ["Registro no conselho profissional da área"],
-  },
-  {
-    keywords: ["professor", "docência", "educação", "ensino"],
-    documents: ["Comprovantes de titulação e experiência docente"],
-  },
-  {
-    keywords: ["pesquisa", "pesquisador", "científica", "científico"],
-    documents: ["Projeto ou plano de pesquisa"],
   },
 ];
 

@@ -4,10 +4,11 @@ import { getConfiguredStates } from "@/lib/config";
 import { readEditaisInBackground } from "@/lib/edital-queue";
 import type { SuggestibleDocument } from "@/lib/document-matching";
 import { getStaleStates, refreshLiveOpportunities } from "@/lib/live-refresh";
+import { isOpportunityCategory } from "@/lib/opportunities";
 import { fetchAllPages } from "@/lib/paginate";
 import { createServiceClient } from "@/lib/supabase/admin";
 import type { Database } from "@/lib/supabase/database.types";
-import type { Opportunity, OpportunityCategory, UserKind, UserProfile } from "@/lib/types";
+import type { Opportunity, UserKind, UserProfile } from "@/lib/types";
 
 type Client = SupabaseClient<Database>;
 
@@ -36,7 +37,7 @@ export async function loadDashboardProfile(supabase: Client, userId: string): Pr
     id: data.id,
     full_name: data.full_name,
     user_kind: data.user_kind as UserKind,
-    categories: data.categories as OpportunityCategory[],
+    categories: data.categories.filter(isOpportunityCategory),
     keywords: data.keywords,
     products_services: data.products_services,
     embedding_model: data.embedding_model,

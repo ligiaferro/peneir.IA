@@ -21,7 +21,7 @@ export default function PrivacyPage() {
         <li>
           <strong>Conta:</strong> nome ou razão social, e-mail, senha (guardada
           de forma criptografada pelo provedor de autenticação) e tipo de
-          perfil (pessoa ou empresa).
+          perfil.
         </li>
         <li>
           <strong>Perfil de busca:</strong> descrição de produtos e serviços,

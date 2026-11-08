@@ -3,9 +3,6 @@ import { opportunityCategories } from "@/lib/types";
 
 export const categoryLabels: Record<OpportunityCategory, string> = {
   licitacoes: "Licitações",
-  concursos: "Concursos",
-  doutorado: "Doutorado",
-  bolsas: "Bolsas e pesquisa",
 };
 
 /** Minúsculas e sem acentos, para comparar "INFORMATICA" com "informática". */
@@ -24,7 +21,9 @@ export function normalizeSearchText(value: string) {
 export function getSearchCategories(
   profile: Pick<UserProfile, "categories">,
 ): readonly OpportunityCategory[] {
-  return profile.categories.length > 0 ? profile.categories : opportunityCategories;
+  // Ignora categorias que deixaram de existir em perfis antigos.
+  const valid = profile.categories.filter(isOpportunityCategory);
+  return valid.length > 0 ? valid : opportunityCategories;
 }
 
 export function isOpportunityCategory(

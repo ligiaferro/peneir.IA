@@ -1,9 +1,4 @@
-export const opportunityCategories = [
-  "licitacoes",
-  "concursos",
-  "doutorado",
-  "bolsas",
-] as const;
+export const opportunityCategories = ["licitacoes"] as const;
 
 export type OpportunityCategory = (typeof opportunityCategories)[number];
 export type UserKind = "empresa" | "pessoa";

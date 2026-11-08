@@ -433,15 +433,9 @@ export default async function HomePage({
               </h3>
               <p>
                 Concursos, seleções de doutorado e bolsas de pesquisa no mesmo
-                radar. Já é possível criar sua conta e montar seu perfil
-                enquanto conectamos essas fontes.
+                radar. O cadastro de pessoas abre quando conectarmos essas
+                fontes.
               </p>
-              <Link
-                className="button button-secondary"
-                href={signedIn ? "/dashboard" : "/login?modo=cadastro"}
-              >
-                {signedIn ? "Abrir meu painel" : "Criar conta pessoal"}
-              </Link>
             </article>
           </div>
         </section>

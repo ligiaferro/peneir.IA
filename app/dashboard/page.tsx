@@ -193,9 +193,8 @@ export default async function DashboardPage({
               <span>Mais oportunidades.</span>
             </h1>
             <p>
-              Acompanhe licitações, concursos, doutorados e bolsas em um só
-              lugar. Configure seu perfil para encontrar o que faz sentido para
-              você.
+              Acompanhe as licitações abertas em um só lugar. Configure seu
+              perfil para encontrar o que faz sentido para você.
             </p>
             <a
               className="button"
@@ -222,15 +221,12 @@ export default async function DashboardPage({
               </span>
               <h2>O próximo passo pode estar em um edital.</h2>
               <p>
-                Um processo simples para empresas e pessoas, com documentos
+                Um processo simples para empresas, com documentos
                 organizados e avisos de novas oportunidades.
               </p>
             </div>
             <div className="aside-categories">
               <span>Compras públicas</span>
-              <span>Concursos</span>
-              <span>Pós-graduação</span>
-              <span>Pesquisa</span>
             </div>
           </aside>
         </section>

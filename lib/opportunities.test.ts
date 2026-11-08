@@ -7,13 +7,13 @@ import {
 
 describe("getSearchCategories", () => {
   it("uses the selected categories, or all of them when none is selected", () => {
-    expect(getSearchCategories({ categories: ["bolsas"] })).toEqual(["bolsas"]);
-    expect(getSearchCategories({ categories: [] })).toEqual([
-      "licitacoes",
-      "concursos",
-      "doutorado",
-      "bolsas",
-    ]);
+    expect(getSearchCategories({ categories: ["licitacoes"] })).toEqual(["licitacoes"]);
+    expect(getSearchCategories({ categories: [] })).toEqual(["licitacoes"]);
+  });
+
+  it("ignores categories that no longer exist in old profiles", () => {
+    const stale = ["doutorado", "bolsas"] as never;
+    expect(getSearchCategories({ categories: stale })).toEqual(["licitacoes"]);
   });
 });
 

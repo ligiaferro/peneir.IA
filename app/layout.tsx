@@ -4,7 +4,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "peneir.IA | Oportunidades que combinam com você",
   description:
-    "Encontre editais, concursos, doutorados e bolsas. Organize seus documentos e receba alertas de novas oportunidades.",
+    "Encontre licitações abertas no PNCP. Organize seus documentos e receba alertas de novas oportunidades.",
 };
 
 export default function RootLayout({

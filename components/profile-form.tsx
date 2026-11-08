@@ -68,7 +68,7 @@ export function ProfileForm({ profile }: { profile: UserProfile }) {
           placeholder={
             userKind === "empresa"
               ? "ex.: fornecimento de refeições prontas, merenda escolar e serviços de alimentação coletiva"
-              : "ex.: pesquisa em saúde pública, cursos de engenharia ambiental"
+              : "ex.: consultoria em tecnologia, manutenção predial, serviços de engenharia"
           }
           required={userKind === "empresa"}
         />

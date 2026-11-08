@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { AuthForm } from "@/app/auth/auth-form";
 
 const callbackErrors: Record<string, string> = {
@@ -12,10 +13,7 @@ export default async function LoginPage({
 }) {
   const { erro, modo } = await searchParams;
   const callbackError = typeof erro === "string" ? callbackErrors[erro] : undefined;
-  return (
-    <AuthForm
-      callbackError={callbackError}
-      mode={modo === "cadastro" ? "signup" : "login"}
-    />
-  );
+  // Links antigos de cadastro levam ao cadastro de empresa (o único disponível).
+  if (modo === "cadastro") redirect("/cadastro-empresa");
+  return <AuthForm callbackError={callbackError} mode="login" />;
 }

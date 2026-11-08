@@ -3,19 +3,18 @@ import { getDocumentSuggestions } from "./document-suggestions";
 
 describe("getDocumentSuggestions", () => {
   it("suggests documents for selected opportunity categories", () => {
-    expect(getDocumentSuggestions(["doutorado"], [])).toContain(
-      "Projeto de pesquisa",
+    expect(getDocumentSuggestions(["licitacoes"], [])).toContain(
+      "Comprovante de inscrição no CNPJ",
     );
   });
 
   it("adds relevant documents based on keywords without duplicates", () => {
     const suggestions = getDocumentSuggestions(
       ["licitacoes"],
-      ["Engenharia", "pesquisa"],
+      ["Engenharia", "obra"],
     );
 
     expect(suggestions).toContain("Registro profissional no CREA ou CAU");
-    expect(suggestions).toContain("Projeto ou plano de pesquisa");
     expect(new Set(suggestions).size).toBe(suggestions.length);
   });
 });

@@ -41,11 +41,11 @@ export async function signUpAction(
   const fullName = String(formData.get("full_name") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
-  const userKind =
-    formData.get("user_kind") === "empresa" ? "empresa" : "pessoa";
+  // O cadastro é só de empresas; o tipo nunca vem do formulário.
+  const userKind = "empresa";
   if (!fullName || !email || password.length < 8) {
     return {
-      error: "Informe seu nome, e-mail e uma senha com pelo menos 8 caracteres.",
+      error: "Informe a razão social, o e-mail e uma senha com pelo menos 8 caracteres.",
     };
   }
   if (formData.get("accept_terms") !== "on") {
@@ -87,7 +87,7 @@ export async function signUpAction(
     };
   }
 
-  redirect(userKind === "empresa" ? "/empresa" : "/dashboard");
+  redirect("/empresa");
 }
 
 export async function signOutAction() {

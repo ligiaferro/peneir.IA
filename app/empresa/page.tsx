@@ -5,7 +5,8 @@ import { ProfileForm } from "@/components/profile-form";
 import type { CompanyDocument } from "./company-documents";
 import { CompanyDocuments } from "./company-documents";
 import { createClient } from "@/lib/supabase/server";
-import type { OpportunityCategory, UserKind, UserProfile } from "@/lib/types";
+import { isOpportunityCategory } from "@/lib/opportunities";
+import type { UserKind, UserProfile } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -53,7 +54,7 @@ export default async function CompanyPage() {
     id: profileResult.data.id,
     full_name: profileResult.data.full_name,
     user_kind: profileResult.data.user_kind as UserKind,
-    categories: profileResult.data.categories as OpportunityCategory[],
+    categories: profileResult.data.categories.filter(isOpportunityCategory),
     keywords: profileResult.data.keywords,
     products_services: profileResult.data.products_services,
     embedding_model: profileResult.data.embedding_model,
