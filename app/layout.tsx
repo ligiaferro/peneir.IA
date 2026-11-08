@@ -13,7 +13,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="pt-BR">
+    // Extensões do navegador costumam incluir atributos no <html> antes de o
+    // React carregar; isso só silencia diferenças nos atributos desta tag.
+    <html lang="pt-BR" suppressHydrationWarning>
       <body>{children}</body>
     </html>
   );

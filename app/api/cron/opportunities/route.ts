@@ -5,7 +5,11 @@ import {
   minimumOpportunitySimilarity,
 } from "@/lib/ai";
 import { isCronAuthorized } from "@/lib/cron-auth";
-import { formatDeadline } from "@/lib/format";
+import {
+  alertEmailHtml,
+  alertEmailSubject,
+  maxItemsPerEmail,
+} from "@/lib/alert-email";
 import { listOpenOpportunities } from "@/lib/opportunity-store";
 import { brazilianStateCodes, normalizeStates } from "@/lib/states";
 import { createServiceClient } from "@/lib/supabase/admin";
@@ -19,66 +23,12 @@ export const maxDuration = 300;
 
 /** Só avisa sobre oportunidades vistas pela primeira vez nesta janela. */
 const newOpportunityWindowMs = 3 * 24 * 60 * 60 * 1000;
-/** Itens listados no corpo do e-mail; o restante fica no painel. */
-const maxItemsPerEmail = 20;
 /** Mantém a resposta RPC abaixo do limite padrão de linhas do PostgREST. */
 const semanticMatchBatchSize = 40;
 /** Pausa entre envios para respeitar o limite de taxa do Resend. */
 const delayBetweenEmailsMs = 600;
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-function escapeHtml(value: string) {
-  return value.replace(/[&<>"']/g, (character) => {
-    const entities: Record<string, string> = {
-      "&": "&amp;",
-      "<": "&lt;",
-      ">": "&gt;",
-      '"': "&quot;",
-      "'": "&#39;",
-    };
-    return entities[character];
-  });
-}
-
-function emailHtml(name: string, opportunities: Opportunity[]) {
-  const listed = opportunities.slice(0, maxItemsPerEmail);
-  const remaining = opportunities.length - listed.length;
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
-  const dashboardUrl = appUrl ? `${appUrl.replace(/\/$/, "")}/dashboard` : null;
-
-  const items = listed
-    .map(
-      (opportunity) => `
-        <li style="margin:0 0 20px">
-          <strong>${escapeHtml(opportunity.title)}</strong><br>
-          ${escapeHtml(opportunity.organization)} · ${escapeHtml(opportunity.location)}<br>
-          Propostas/inscrições até ${escapeHtml(formatDeadline(opportunity.deadline))}<br>
-          <a href="${escapeHtml(opportunity.sourceUrl)}">Consultar fonte</a>
-        </li>`,
-    )
-    .join("");
-
-  return `
-    <div style="font-family:Arial,sans-serif;color:#172f2b;line-height:1.6;max-width:620px;margin:auto">
-      <h1 style="color:#1b7159">Novas oportunidades para você</h1>
-      <p>Olá, ${escapeHtml(name)}. Encontramos ${opportunities.length} ${
-        opportunities.length === 1 ? "oportunidade nova" : "oportunidades novas"
-      } que combinam com seu perfil:</p>
-      <ul>${items}</ul>
-      ${
-        remaining > 0
-          ? `<p>E mais ${remaining} no seu painel${
-              dashboardUrl
-                ? `: <a href="${escapeHtml(dashboardUrl)}">abrir peneir.IA</a>`
-                : "."
-            }</p>`
-          : ""
-      }
-      <p>Licitações são coletadas do Portal Nacional de Contratações Públicas (PNCP). Confirme sempre requisitos e prazos no edital oficial.</p>
-      <p style="color:#64736e;font-size:12px">Você pode alterar seus alertas no seu perfil peneir.IA.</p>
-    </div>`;
-}
 
 type ServiceClient = ReturnType<typeof createServiceClient>;
 type DeliveryUpdate = Database["public"]["Tables"]["notification_deliveries"]["Update"];
@@ -318,11 +268,8 @@ export async function GET(request: NextRequest) {
     const { error: emailError } = await resend.emails.send({
       from: process.env.RESEND_FROM_EMAIL,
       to: authUser.email,
-      subject:
-        claimed.length === 1
-          ? `Nova oportunidade: ${claimed[0].title}`
-          : `${claimed.length} novas oportunidades para você`,
-      html: emailHtml(profile.full_name || "Olá", claimed),
+      subject: alertEmailSubject(claimed),
+      html: alertEmailHtml(profile.full_name || "Olá", claimed),
     });
     emailsSent += 1;
 

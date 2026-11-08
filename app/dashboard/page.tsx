@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { OpportunityCard } from "@/components/opportunity-card";
 import { ProfileForm } from "@/components/profile-form";
+import { SendAlertButton } from "@/components/send-alert-button";
 import { signOutAction } from "@/app/auth/actions";
 import { getSearchCategories } from "@/lib/opportunities";
 import {
@@ -337,6 +338,9 @@ export default async function DashboardPage() {
               Não foi possível atualizar todos os dados do PNCP agora. As
               oportunidades já armazenadas continuam disponíveis.
             </p>
+          )}
+          {profile.embedding_model && authData.user.email && (
+            <SendAlertButton email={authData.user.email} />
           )}
           {!profile.embedding_model ? (
             <div className="empty-state">

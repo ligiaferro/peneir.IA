@@ -8,9 +8,14 @@ const callbackErrors: Record<string, string> = {
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ erro?: string | string[] }>;
+  searchParams: Promise<{ erro?: string | string[]; modo?: string | string[] }>;
 }) {
-  const { erro } = await searchParams;
+  const { erro, modo } = await searchParams;
   const callbackError = typeof erro === "string" ? callbackErrors[erro] : undefined;
-  return <AuthForm callbackError={callbackError} />;
+  return (
+    <AuthForm
+      callbackError={callbackError}
+      mode={modo === "cadastro" ? "signup" : "login"}
+    />
+  );
 }

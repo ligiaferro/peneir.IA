@@ -1,11 +1,25 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createEmbeddings, getEmbeddingModel, vectorToPostgres } from "@/lib/ai";
+import { Resend } from "resend";
+import {
+  createEmbeddings,
+  getEmbeddingModel,
+  isAboveSemanticMatchThreshold,
+  minimumOpportunitySimilarity,
+  vectorToPostgres,
+} from "@/lib/ai";
+import {
+  alertEmailHtml,
+  alertEmailSubject,
+  maxItemsPerEmail,
+} from "@/lib/alert-email";
 import { buildProfileEmbeddingText } from "@/lib/opportunity-indexing";
+import { listMatchingOpportunities } from "@/lib/opportunity-store";
 import { createClient } from "@/lib/supabase/server";
-import { isOpportunityCategory } from "@/lib/opportunities";
-import { normalizeStates } from "@/lib/states";
+import { getSearchCategories, isOpportunityCategory } from "@/lib/opportunities";
+import { brazilianStateCodes, normalizeStates } from "@/lib/states";
+import type { OpportunityCategory } from "@/lib/types";
 
 export type ProfileState = { error?: string; notice?: string };
 
@@ -133,4 +147,105 @@ export async function updateProfileAction(
 
   revalidatePath("/dashboard");
   return { notice: "Perfil atualizado." };
+}
+
+export type SendAlertState = { error?: string; notice?: string };
+
+/** Intervalo mínimo entre envios imediatos do mesmo usuário. */
+const sendAlertCooldownMs = 60_000;
+/**
+ * Último envio imediato por usuário. Fica na memória do servidor: protege
+ * contra cliques repetidos, mas não é compartilhado entre instâncias.
+ */
+const lastAlertSentAt = new Map<string, number>();
+
+/**
+ * Envia agora, para o e-mail da conta, os editais relevantes do perfil (mesmo
+ * matching, limiar e estados do painel). Serve para demonstração: não marca
+ * nada como enviado, então o alerta diário automático segue igual.
+ */
+export async function sendAlertNowAction(): Promise<SendAlertState> {
+  if (!process.env.RESEND_API_KEY || !process.env.RESEND_FROM_EMAIL) {
+    return { error: "O envio de e-mails não está configurado (RESEND_API_KEY e RESEND_FROM_EMAIL)." };
+  }
+
+  const supabase = await createClient();
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData.user) return { error: "Sua sessão expirou. Entre novamente." };
+  const user = authData.user;
+  if (!user.email) return { error: "Sua conta não tem um e-mail cadastrado." };
+  if (!user.email_confirmed_at) {
+    return { error: "Confirme seu e-mail antes de receber alertas." };
+  }
+
+  const elapsed = Date.now() - (lastAlertSentAt.get(user.id) ?? 0);
+  if (elapsed < sendAlertCooldownMs) {
+    const seconds = Math.ceil((sendAlertCooldownMs - elapsed) / 1000);
+    return { error: `Aguarde ${seconds} s para enviar de novo.` };
+  }
+
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("full_name, categories, keywords, states, embedding_model")
+    .eq("id", user.id)
+    .maybeSingle();
+  if (profileError || !profile) {
+    return { error: "Não foi possível carregar seu perfil. Tente novamente." };
+  }
+  if (!profile.embedding_model) {
+    return {
+      error: "Descreva os produtos e serviços (ou temas de interesse) e salve o perfil antes de enviar.",
+    };
+  }
+
+  const { states } = normalizeStates(profile.states ?? []);
+  let opportunities;
+  try {
+    opportunities = await listMatchingOpportunities(
+      supabase,
+      user.id,
+      getSearchCategories({ categories: profile.categories as OpportunityCategory[] }),
+      states.length > 0 ? states : brazilianStateCodes,
+      minimumOpportunitySimilarity,
+    );
+  } catch (error) {
+    console.error("Could not match opportunities for the immediate alert.", {
+      userId: user.id,
+      error: error && typeof error === "object" && "message" in error ? error.message : error,
+    });
+    return { error: "Não foi possível buscar os editais agora. Tente novamente." };
+  }
+  // Os mais relevantes primeiro, no mesmo limite do alerta diário.
+  const relevant = opportunities
+    .filter(({ matchScore }) => isAboveSemanticMatchThreshold(matchScore ?? Number.NaN))
+    .slice(0, maxItemsPerEmail);
+  if (relevant.length === 0) {
+    return {
+      notice: "Nenhum edital aberto atinge a similaridade mínima com seu perfil agora; nenhum e-mail foi enviado.",
+    };
+  }
+
+  // Reserva o intervalo antes de enviar, para cliques simultâneos não duplicarem.
+  lastAlertSentAt.set(user.id, Date.now());
+  const resend = new Resend(process.env.RESEND_API_KEY);
+  const { error: emailError } = await resend.emails.send({
+    from: process.env.RESEND_FROM_EMAIL,
+    to: user.email,
+    subject: alertEmailSubject(relevant, { demo: true }),
+    html: alertEmailHtml(profile.full_name || "Olá", relevant, { demo: true }),
+  });
+  if (emailError) {
+    lastAlertSentAt.delete(user.id);
+    console.error("Immediate opportunity email failed.", {
+      userId: user.id,
+      error: emailError.message,
+    });
+    return { error: "O provedor de e-mail recusou o envio. Tente novamente em instantes." };
+  }
+
+  return {
+    notice: `E-mail enviado para ${user.email} com ${relevant.length} ${
+      relevant.length === 1 ? "edital relevante" : "editais relevantes"
+    }.`,
+  };
 }
