@@ -42,6 +42,12 @@ export function DocumentUploader({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [selectedDocumentId, setSelectedDocumentId] = useState("");
+  const [hasFile, setHasFile] = useState(false);
+  const [success, setSuccess] = useState("");
+  // Com documento já vinculado, o envio de outro PDF fica recolhido para não
+  // parecer uma etapa obrigatória depois de reutilizar um documento.
+  const [showUploadForm, setShowUploadForm] = useState(false);
+  const uploadFormVisible = documents.length === 0 || showUploadForm;
   const router = useRouter();
   const selectedDocument = reusableDocuments.find(
     (document) => document.id === selectedDocumentId,
@@ -49,13 +55,26 @@ export function DocumentUploader({
 
   async function uploadDocument(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    const file = formData.get("file");
+    const fileChosen = file instanceof File && file.size > 0;
+
+    // Sem arquivo novo, mas com um documento escolhido em "Reutilizar":
+    // o botão principal vincula o documento já enviado.
+    if (!fileChosen && selectedDocument) {
+      setSelectedDocumentId("");
+      await reuseDocument(selectedDocument);
+      return;
+    }
+
     setBusy(true);
     setError("");
+    setSuccess("");
 
     try {
       const response = await fetch("/api/documents", {
         method: "POST",
-        body: new FormData(event.currentTarget),
+        body: formData,
       });
       const result = (await response.json()) as {
         document?: UserDocument;
@@ -69,6 +88,9 @@ export function DocumentUploader({
 
       onUploaded(result.document, result.association);
       formRef.current?.reset();
+      setHasFile(false);
+      setShowUploadForm(false);
+      setSuccess("Documento enviado e vinculado a este requisito.");
       router.refresh();
     } catch {
       setError("Falha de conexão ao enviar o documento. Tente novamente.");
@@ -80,6 +102,7 @@ export function DocumentUploader({
   async function reuseDocument(document: UserDocument) {
     setBusy(true);
     setError("");
+    setSuccess("");
     try {
       const response = await fetch("/api/document-opportunities", {
         method: "POST",
@@ -99,6 +122,9 @@ export function DocumentUploader({
         return;
       }
       onLinked(document, result.association);
+      setSuccess(
+        "Documento vinculado a este requisito.",
+      );
       router.refresh();
     } catch {
       setError("Falha de conexão ao reutilizar o documento. Tente novamente.");
@@ -110,6 +136,7 @@ export function DocumentUploader({
   async function unlinkDocument(documentId: string) {
     setBusy(true);
     setError("");
+    setSuccess("");
     try {
       const response = await fetch("/api/document-opportunities", {
         method: "DELETE",
@@ -226,33 +253,54 @@ export function DocumentUploader({
         </div>
       )}
 
-      <form ref={formRef} onSubmit={uploadDocument}>
-        <input type="hidden" name="opportunity_id" value={opportunityId} />
-        <input type="hidden" name="document_type" value={requirement} />
-        <div className="field">
-          <label htmlFor={`file-${fieldId}`}>Ou envie um novo PDF (até 4 MB)</label>
-          <input
-            id={`file-${fieldId}`}
-            className="input"
-            name="file"
-            type="file"
-            accept="application/pdf,.pdf"
-            required
-          />
-        </div>
-        <div className="form-grid">
-          <div className="field">
-            <label htmlFor={`expiry-${fieldId}`}>Validade (se conhecida)</label>
-            <input id={`expiry-${fieldId}`} name="expires_at" type="date" />
-          </div>
-          <div className="requirement-upload-action">
-            <button className="button button-small" disabled={busy} type="submit">
-              {busy ? "Enviando..." : "Enviar documento"}
-            </button>
-          </div>
-        </div>
-      </form>
+      {!uploadFormVisible && (
+        <button
+          className="button button-secondary button-small"
+          type="button"
+          disabled={busy}
+          onClick={() => setShowUploadForm(true)}
+        >
+          Enviar outro PDF
+        </button>
+      )}
 
+      {uploadFormVisible && (
+        <form ref={formRef} onSubmit={uploadDocument}>
+          <input type="hidden" name="opportunity_id" value={opportunityId} />
+          <input type="hidden" name="document_type" value={requirement} />
+          <div className="field">
+            <label htmlFor={`file-${fieldId}`}>Ou envie um novo PDF (até 4 MB)</label>
+            <input
+              id={`file-${fieldId}`}
+              className="input"
+              name="file"
+              type="file"
+              accept="application/pdf,.pdf"
+              required={!selectedDocument}
+              onChange={(event) =>
+                setHasFile(Boolean(event.currentTarget.files?.length))
+              }
+            />
+          </div>
+          <div className="form-grid">
+            <div className="field">
+              <label htmlFor={`expiry-${fieldId}`}>Validade (se conhecida)</label>
+              <input id={`expiry-${fieldId}`} name="expires_at" type="date" />
+            </div>
+            <div className="requirement-upload-action">
+              <button className="button button-small" disabled={busy} type="submit">
+                {busy
+                  ? "Enviando..."
+                  : selectedDocument && !hasFile
+                    ? "Usar documento selecionado"
+                    : "Enviar documento"}
+              </button>
+            </div>
+          </div>
+        </form>
+      )}
+
+      {success && <p className="notice">{success}</p>}
       {error && <p className="notice notice-error">{error}</p>}
     </div>
   );

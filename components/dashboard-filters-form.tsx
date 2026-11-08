@@ -1,3 +1,4 @@
+import Form from "next/form";
 import Link from "next/link";
 import {
   deadlineOptions,
@@ -7,7 +8,10 @@ import {
 } from "@/lib/dashboard-filters";
 import { brazilianStates } from "@/lib/states";
 
-/** Barra de busca e filtros do painel (formulário GET, funciona sem JavaScript). */
+/**
+ * Barra de busca e filtros do painel. Usa o `Form` do Next (navegação no
+ * cliente sem rolar para o topo) e cai para um GET comum sem JavaScript.
+ */
 export function DashboardFiltersForm({
   filters,
   states,
@@ -18,7 +22,14 @@ export function DashboardFiltersForm({
   usesProfileStates: boolean;
 }) {
   return (
-    <form className="dashboard-filters" action="/dashboard" method="get">
+    <Form
+      // Remonta quando os filtros mudam (ex.: "Limpar"), pois os campos são
+      // não controlados e manteriam os valores antigos na navegação no cliente.
+      key={JSON.stringify(filters)}
+      className="dashboard-filters"
+      action="/dashboard"
+      scroll={false}
+    >
       <div className="field dashboard-filter-search">
         <label htmlFor="filtro-q">Buscar</label>
         <input
@@ -26,11 +37,11 @@ export function DashboardFiltersForm({
           name="q"
           type="search"
           defaultValue={filters.query}
-          placeholder="Objeto, órgão ou cidade"
-          maxLength={120}
-        />
-      </div>
-      <div className="field">
+            placeholder="Objeto, órgão ou cidade"
+            maxLength={120}
+          />
+        </div>
+        <div className="field">
         <label htmlFor="filtro-uf">Estado</label>
         <select id="filtro-uf" name="uf" defaultValue={filters.uf}>
           <option value="">
@@ -77,6 +88,6 @@ export function DashboardFiltersForm({
           </Link>
         )}
       </div>
-    </form>
+    </Form>
   );
 }
